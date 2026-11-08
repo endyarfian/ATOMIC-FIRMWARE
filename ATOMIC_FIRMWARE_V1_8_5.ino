@@ -14,7 +14,7 @@
 #define FIRMWARE_VERSION "1.8.5"
 
 // ============================================================
-// A.T.O.M. (Access, Tracking & Operation Monitoring) - ADMIN MODE V1.8.0
+// A.T.O.M. (Access, Tracking & Operation Monitoring) - ADMIN MODE V1.8.5
 // ESP32-S3 DevKitC-1 N16R8
 // ============================================================
 
@@ -557,7 +557,7 @@ const char ADMIN_HTML[] PROGMEM = R"PC200HTML(
 <section><h2>System status</h2><div id="status">Loading…</div><button onclick="refreshStatus()">Refresh status</button></section>
 <section><h2>Enroll operator</h2><p class="muted">Operator IDs start at 1. Use only IDs confirmed empty in the sensor.</p><form id="enrollForm"><input id="opid" type="number" min="1" max="127" placeholder="Fingerprint ID (1–127)" required><input id="opname" maxlength="20" placeholder="Operator name" required><button type="submit">Start enrollment</button></form><p id="enrollStatus">Idle</p><button id="cancelEnroll" class="danger" onclick="cancelEnrollment()" hidden>Cancel enrollment</button></section>
 <section><h2>Operators</h2><div id="operators">Loading…</div><button onclick="loadOperators()">Refresh operators</button></section>
-<p id="message" class="muted"></p><p class="muted" style="text-align: center">ATOMIC SYSTEM © 2026, <a href="https://endyarfian.github.io">ENLISTERS TECHNOLOGY</a>.</p></main><script>
+<p id="message" class="muted"></p><p class="muted" style="text-align: center">ATOMIC SYSTEM © 2026, <a href="https://endyarfian.github.io" target="_blank" rel="noopener noreferrer" style="color: orange;">ENLISTERS TECHNOLOGY</a>.</p></main><script>
 const $=id=>document.getElementById(id);const api = async (path,method='GET',data=null) => {let o={method,headers:{}};if(data){o.headers['Content-Type']='application/x-www-form-urlencoded';o.body=new URLSearchParams(data)}let r=await fetch(path,o);let j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j}
 const refreshStatus = async () => {try{let s=await api('/api/status');$('status').textContent=`Admin: ${s.admin?'ACTIVE':'INACTIVE'} | Fingerprint: ${s.fingerprint?'READY':'ERROR'} | Templates: ${s.templates} | AP: ${s.ip}`}catch(e){$('status').textContent=e.message}}
 const loadOperators = async () => {try{let j=await api('/api/operators');$('operators').innerHTML='';if(!j.operators.length){$('operators').textContent='No operator metadata';return}j.operators.forEach(o=>{let d=document.createElement('div');d.className='operator';let label=document.createElement('span');label.textContent=`ID ${o.id} — ${o.name}`;let edit=document.createElement('button');edit.textContent='Rename';edit.onclick=async()=>{let n=prompt('New operator name',o.name);if(n&&n.trim()){try{await api('/api/operator/rename','POST',{id:o.id,name:n.trim()});await loadOperators()}catch(e){alert(e.message)}}};let del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm(`Delete fingerprint ID ${o.id}?`)){try{await api('/api/operator/delete','POST',{id:o.id});await loadOperators();await refreshStatus()}catch(e){alert(e.message)}}};d.append(label,edit,del);$('operators').append(d)})}catch(e){$('operators').textContent=e.message}}
