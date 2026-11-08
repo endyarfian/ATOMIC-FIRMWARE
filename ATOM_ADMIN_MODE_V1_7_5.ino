@@ -827,8 +827,8 @@ void drawAdminScreenB(GFXcanvas1 &c) {
   // Tampilan idle dipertahankan persis seperti V1.7.
   if (enrollState == ENROLL_IDLE) {
     c.drawBitmap((SCREEN_WIDTH - ICON_WIDTH) / 2, 19, shield_icon, ICON_WIDTH, ICON_HEIGHT, SSD1306_WHITE);
-    drawCenteredTextAtY(c, "ADMIN SESSION IS", 47, 1);
-    drawCenteredTextAtY(c, "RUNNING!", 57, 1);
+    drawCenteredTextAtY(c, "ADMIN SESSION", 47, 1);
+    drawCenteredTextAtY(c, "IS RUNNING!", 57, 1);
     return;
   }
 
