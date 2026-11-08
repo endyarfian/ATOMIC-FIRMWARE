@@ -816,7 +816,6 @@ void drawInformationScreenA(GFXcanvas1 &c) {
 void drawInformationScreenB(GFXcanvas1 &c) {
   // Device ID replaces the INFORMATION header; retain the original details below.
   drawCenteredHeader(c, DEVICE_ID);
-  c.drawFastHLine(0, 17, SCREEN_WIDTH, SSD1306_WHITE);
   drawCenteredTextAtY(c, "ATOMIC FIRMWARE", 25, 1);
   drawCenteredTextAtY(c, FIRMWARE_VERSION, 39, 1);
   drawCenteredTextAtY(c, "192.168.4.1", 53, 1);
