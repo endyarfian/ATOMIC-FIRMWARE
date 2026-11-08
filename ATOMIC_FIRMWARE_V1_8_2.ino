@@ -325,10 +325,10 @@ bool adminModeActive = false;
 // ================= ADMIN MODE V1.7 ======================
 // Ganti kedua password sebelum firmware digunakan.
 // AP password minimal 8 karakter; admin password digunakan HTTP Basic Auth.
-static const char* ADMIN_AP_SSID = "A.T.O.M-ADMIN";
-static const char* ADMIN_AP_PASSWORD = "ATOM-ADMIN";
+static const char* ADMIN_AP_SSID = "ATOMIC-001 SSID";
+static const char* ADMIN_AP_PASSWORD = "atomicadmin";
 static const char* ADMIN_WEB_USER = "admin";
-static const char* ADMIN_WEB_PASSWORD = "atom-admin";
+static const char* ADMIN_WEB_PASSWORD = "atomicadmin";
 
 static const uint16_t MAX_FINGERPRINT_ID = 127;
 static const uint16_t FIRST_NEW_OPERATOR_ID = 1; // Semua slot 1-127 dapat digunakan jika kosong di sensor.
@@ -539,20 +539,277 @@ void updateEnrollment() {
 }
 
 const char ADMIN_HTML[] PROGMEM = R"PC200HTML(
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A.T.O.M. Admin</title>
-<style>body{font-family:Arial,sans-serif;background:#101820;color:#edf2f4;margin:0;padding:18px}main{max-width:760px;margin:auto}h1{font-size:22px}section{background:#1c2b36;padding:16px;border-radius:10px;margin:14px 0}input,button{padding:10px;margin:5px 3px;border-radius:6px;border:1px solid #647783}input{max-width:95%;background:#f7f7f7}button{background:#d9a441;color:#111;font-weight:bold;cursor:pointer}.muted{color:#aab7c0;font-size:13px}.operator{display:flex;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid #40515c;padding:9px 0}.operator span{overflow-wrap:anywhere}.danger{background:#c94c4c;color:white}#message{white-space:pre-wrap}</style></head><body><main>
-<h1>A.T.O.M. — ADMIN</h1><p class="muted">Access, Tracking &amp; Operation Monitoring • Connect to A.T.O.M-ADMIN and open 192.168.4.1</p>
-<section><h2>System status</h2><div id="status">Loading…</div><button onclick="refreshStatus()">Refresh status</button></section>
-<section><h2>Enroll operator</h2><p class="muted">Fingerprint IDs 1–127 are available. An ID can only be used when its slot is empty in the sensor.</p><form id="enrollForm"><input id="opid" type="number" min="1" max="127" placeholder="Fingerprint ID (1–127)" required><input id="opname" maxlength="20" placeholder="Operator name" required><button type="submit">Start enrollment</button></form><p id="enrollStatus">Idle</p><button id="cancelEnroll" class="danger" onclick="cancelEnrollment()" hidden>Cancel enrollment</button></section>
-<section><h2>Operators</h2><div id="operators">Loading…</div><button onclick="loadOperators()">Refresh operators</button></section>
-<p id="message" class="muted"></p></main><script>
-const $=id=>document.getElementById(id);async function api(path,method='GET',data=null){let o={method,headers:{}};if(data){o.headers['Content-Type']='application/x-www-form-urlencoded';o.body=new URLSearchParams(data)}let r=await fetch(path,o);let j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j}
-async function refreshStatus(){try{let s=await api('/api/status');$('status').textContent=`Device: ${s.deviceId} | Firmware: ${s.firmwareVersion} | Admin: ${s.admin?'ACTIVE':'INACTIVE'} | Fingerprint: ${s.fingerprint?'READY':'ERROR'} | Templates: ${s.templates} | AP: ${s.ip}`}catch(e){$('status').textContent=e.message}}
-async function loadOperators(){try{let j=await api('/api/operators');$('operators').innerHTML='';if(!j.operators.length){$('operators').textContent='No operator metadata';return}j.operators.forEach(o=>{let d=document.createElement('div');d.className='operator';let label=document.createElement('span');label.textContent=`ID ${o.id} — ${o.name}`;let edit=document.createElement('button');edit.textContent='Rename';edit.onclick=async()=>{let n=prompt('New operator name',o.name);if(n&&n.trim()){try{await api('/api/operator/rename','POST',{id:o.id,name:n.trim()});await loadOperators()}catch(e){alert(e.message)}}};let del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm(`Delete fingerprint ID ${o.id}?`)){try{await api('/api/operator/delete','POST',{id:o.id});await loadOperators();await refreshStatus()}catch(e){alert(e.message)}}};d.append(label,edit,del);$('operators').append(d)})}catch(e){$('operators').textContent=e.message}}
-$('enrollForm').onsubmit=async e=>{e.preventDefault();try{let j=await api('/api/enroll/start','POST',{id:$('opid').value,name:$('opname').value.trim()});$('enrollStatus').textContent=j.message;$('cancelEnroll').hidden=false;pollEnroll()}catch(e){alert(e.message)}};
-let poller=null;async function pollEnroll(){if(poller)clearInterval(poller);poller=setInterval(async()=>{try{let j=await api('/api/enroll/status');$('enrollStatus').textContent=j.state+' — '+j.message;if(j.state==='Completed'||j.state==='Failed'||j.state==='Idle'){clearInterval(poller);poller=null;$('cancelEnroll').hidden=true;loadOperators();refreshStatus()}}catch(e){$('enrollStatus').textContent=e.message;clearInterval(poller);poller=null}},900)}
-async function cancelEnrollment(){try{await api('/api/enroll/cancel','POST',{});$('enrollStatus').textContent='Cancelled';$('cancelEnroll').hidden=true;if(poller){clearInterval(poller);poller=null}}catch(e){alert(e.message)}}
-refreshStatus();loadOperators();</script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>A.T.O.M. Admin</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #101820;
+        color: #edf2f4;
+        margin: 0;
+        padding: 18px;
+      }
+      main {
+        max-width: 760px;
+        margin: auto;
+      }
+      h1 {
+        font-size: 22px;
+      }
+      section {
+        background: #1c2b36;
+        padding: 16px;
+        border-radius: 10px;
+        margin: 14px 0;
+      }
+      input,
+      button {
+        padding: 10px;
+        margin: 5px 3px;
+        border-radius: 6px;
+        border: 1px solid #647783;
+      }
+      input {
+        max-width: 95%;
+        background: #f7f7f7;
+      }
+      button {
+        background: #d9a441;
+        color: #111;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      .muted {
+        color: #aab7c0;
+        font-size: 13px;
+      }
+      .operator {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+        border-top: 1px solid #40515c;
+        padding: 9px 0;
+      }
+      .operator span {
+        overflow-wrap: anywhere;
+      }
+      .danger {
+        background: #c94c4c;
+        color: white;
+      }
+      #message {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="lucide lucide-fingerprint-pattern preview-icon"
+        >
+          <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
+          <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
+          <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" />
+          <path d="M2 12a10 10 0 0 1 18-6" />
+          <path d="M2 16h.01" />
+          <path d="M21.8 16c.2-2 .131-5.354 0-6" />
+          <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2" />
+          <path d="M8.65 22c.21-.66.45-1.32.57-2" />
+          <path d="M9 6.8a6 6 0 0 1 9 5.2v2" />
+        </svg>
+        <h1 style="margin: 0">A.T.O.M. — ATOMIC ADMIN PAGE</h1>
+      </div>
+      <p class="muted">Access Tracking &amp; Operational Monitoring.</p>
+      <section>
+        <h3>SYSTEM STATUS</h3>
+        <div id="status">Loading…</div>
+        <button onclick="refreshStatus()">Refresh status</button>
+      </section>
+      <section>
+        <h3>ENROLL OPERATOR</h3>
+        <p class="muted">
+          Fingerprint IDs 1–127 are available. An ID can only be used when its
+          slot is empty in the sensor.
+        </p>
+        <form id="enrollForm">
+          <input
+            id="opid"
+            type="number"
+            min="1"
+            max="127"
+            placeholder="Fingerprint ID (1–127)"
+            required
+          /><input
+            id="opname"
+            maxlength="20"
+            placeholder="Operator name"
+            required
+          /><button type="submit">Start enrollment</button>
+        </form>
+        <p id="enrollStatus">Idle</p>
+        <button
+          id="cancelEnroll"
+          class="danger"
+          onclick="cancelEnrollment()"
+          hidden
+        >
+          Cancel enrollment
+        </button>
+      </section>
+      <section>
+        <h3>OPERATORS LIST</h3>
+        <div id="operators">Loading…</div>
+        <button onclick="loadOperators()">Refresh operators</button>
+      </section>
+      <p id="message" class="muted"></p>
+      <p class="muted" style="text-align: center">
+        ENLISTERS TECHNOLOGY © 2026
+      </p>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      async function api(path, method = "GET", data = null) {
+        let o = { method, headers: {} };
+        if (data) {
+          o.headers["Content-Type"] = "application/x-www-form-urlencoded";
+          o.body = new URLSearchParams(data);
+        }
+        let r = await fetch(path, o);
+        let j = await r.json();
+        if (!r.ok || j.ok === false) throw Error(j.error || "Request failed");
+        return j;
+      }
+      async function refreshStatus() {
+        try {
+          let s = await api("/api/status");
+          $("status").textContent =
+            `Device: ${s.deviceId} | Firmware: ${s.firmwareVersion} | Admin: ${s.admin ? "ACTIVE" : "INACTIVE"} | Fingerprint: ${s.fingerprint ? "READY" : "ERROR"} | Templates: ${s.templates} | AP: ${s.ip}`;
+        } catch (e) {
+          $("status").textContent = e.message;
+        }
+      }
+      async function loadOperators() {
+        try {
+          let j = await api("/api/operators");
+          $("operators").innerHTML = "";
+          if (!j.operators.length) {
+            $("operators").textContent = "No operator metadata";
+            return;
+          }
+          j.operators.forEach((o) => {
+            let d = document.createElement("div");
+            d.className = "operator";
+            let label = document.createElement("span");
+            label.textContent = `ID ${o.id} — ${o.name}`;
+            let edit = document.createElement("button");
+            edit.textContent = "Rename";
+            edit.onclick = async () => {
+              let n = prompt("New operator name", o.name);
+              if (n && n.trim()) {
+                try {
+                  await api("/api/operator/rename", "POST", {
+                    id: o.id,
+                    name: n.trim(),
+                  });
+                  await loadOperators();
+                } catch (e) {
+                  alert(e.message);
+                }
+              }
+            };
+            let del = document.createElement("button");
+            del.className = "danger";
+            del.textContent = "Delete";
+            del.onclick = async () => {
+              if (confirm(`Delete fingerprint ID ${o.id}?`)) {
+                try {
+                  await api("/api/operator/delete", "POST", { id: o.id });
+                  await loadOperators();
+                  await refreshStatus();
+                } catch (e) {
+                  alert(e.message);
+                }
+              }
+            };
+            d.append(label, edit, del);
+            $("operators").append(d);
+          });
+        } catch (e) {
+          $("operators").textContent = e.message;
+        }
+      }
+      $("enrollForm").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          let j = await api("/api/enroll/start", "POST", {
+            id: $("opid").value,
+            name: $("opname").value.trim(),
+          });
+          $("enrollStatus").textContent = j.message;
+          $("cancelEnroll").hidden = false;
+          pollEnroll();
+        } catch (e) {
+          alert(e.message);
+        }
+      };
+      let poller = null;
+      async function pollEnroll() {
+        if (poller) clearInterval(poller);
+        poller = setInterval(async () => {
+          try {
+            let j = await api("/api/enroll/status");
+            $("enrollStatus").textContent = j.state + " — " + j.message;
+            if (
+              j.state === "Completed" ||
+              j.state === "Failed" ||
+              j.state === "Idle"
+            ) {
+              clearInterval(poller);
+              poller = null;
+              $("cancelEnroll").hidden = true;
+              loadOperators();
+              refreshStatus();
+            }
+          } catch (e) {
+            $("enrollStatus").textContent = e.message;
+            clearInterval(poller);
+            poller = null;
+          }
+        }, 900);
+      }
+      async function cancelEnrollment() {
+        try {
+          await api("/api/enroll/cancel", "POST", {});
+          $("enrollStatus").textContent = "Cancelled";
+          $("cancelEnroll").hidden = true;
+          if (poller) {
+            clearInterval(poller);
+            poller = null;
+          }
+        } catch (e) {
+          alert(e.message);
+        }
+      }
+      refreshStatus();
+      loadOperators();
+    </script>
+  </body>
+</html>
 )PC200HTML";
 
 void registerAdminRoutes() {
