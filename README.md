@@ -6,9 +6,9 @@ Firmware akses biometrik berbasis ESP32-S3.
 
 ## Versi
 
-Branch ini adalah pengembangan **A.T.O.M. V1.8.1** dari V1.8.0. Baseline stabil V1.7.5 tetap berada pada branch terpisah.
+Branch ini adalah pengembangan **A.T.O.M. V1.8.2** dari V1.8.1. Baseline stabil V1.7.5 tetap berada pada branch terpisah.
 
-File firmware: `ATOMIC_FIRMWARE_V1_8_1.ino`.
+File firmware: `ATOMIC_FIRMWARE_V1_8_2.ino`.
 
 ## Perubahan V1.8.0 yang dipertahankan
 
@@ -17,7 +17,8 @@ File firmware: `ATOMIC_FIRMWARE_V1_8_1.ino`.
 - Device ID prototipe saat ini: `ATOMIC-001`.
 - V1.7.5 tetap dipertahankan sebagai branch baseline terpisah.
 
-## Perubahan V1.8.1
+## Perubahan V1.8.1 (dipertahankan)
+
 
 - Fingerprint ID 1–127 dapat digunakan jika slot sensor benar-benar kosong.
 - Validasi enrollment memeriksa metadata NVS dan okupansi slot langsung pada sensor untuk mencegah ID ganda.
@@ -25,8 +26,15 @@ File firmware: `ATOMIC_FIRMWARE_V1_8_1.ino`.
 - System Status menampilkan Device ID dan versi firmware.
 - Captive DNS dan HTTP redirect ditambahkan agar perangkat yang mendukung captive-portal detection dapat membuka portal Admin secara otomatis setelah tersambung ke SoftAP.
 
+## Perbaikan V1.8.2
+
+- Pemeriksaan slot tidak lagi menggunakan `loadModel()`, karena perintah tersebut memuat template ke buffer dan dapat menghasilkan DBRANGEFAIL pada slot kosong.
+- Enrollment membaca **Read Index Table (command 0x1F)** dari sensor untuk memeriksa bit okupansi ID secara langsung.
+- ID yang terisi ditolak; ID kosong dapat digunakan kembali.
+- Jika index table tidak dapat dibaca atau respons sensor tidak valid, enrollment dihentikan dengan pesan error. Firmware tidak menganggap slot kosong ketika pemeriksaan gagal.
+
 ## Status pengembangan
 
-V1.8.1 belum dikompilasi atau diuji pada perangkat fisik. Captive portal otomatis bergantung pada dukungan dan perilaku deteksi captive portal di sistem operasi HP/komputer.
+V1.8.2 belum dikompilasi atau diuji pada perangkat fisik. Captive portal otomatis bergantung pada dukungan dan perilaku deteksi captive portal di sistem operasi HP/komputer.
 
 Lakukan kompilasi dan pengujian bench pada ESP32-S3 sebelum penggunaan. Source yang tersimpan di repository belum berarti firmware telah lolos kompilasi atau pengujian perangkat.
