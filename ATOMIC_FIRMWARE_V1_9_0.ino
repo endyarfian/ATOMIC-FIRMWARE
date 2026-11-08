@@ -811,7 +811,7 @@ void stopAdminAccessPoint() {
     enrollMessage = "Cancelled because Admin Mode closed";
   }
   if (adminServerStarted) { adminServer.stop(); adminServerStarted = false; }
-  WiFi.softAPdisconnect(true);
+  WiFi.softAPdisconnect(false);
   if (wifiHasCredentials) {
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
