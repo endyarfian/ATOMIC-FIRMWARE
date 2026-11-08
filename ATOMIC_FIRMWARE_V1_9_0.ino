@@ -410,7 +410,8 @@ static const unsigned long WIFI_RETRY_INTERVAL = 30000UL;
 void beginWifiConnection() {
   if (!wifiHasCredentials || !wifiConfiguredSsid.length()) return;
   WiFi.setAutoReconnect(true);
-  WiFi.mode(adminModeActive ? WIFI_AP_STA : WIFI_STA);
+  wifi_mode_t targetMode = adminModeActive ? WIFI_AP_STA : WIFI_STA;
+  if (WiFi.getMode() != targetMode) WiFi.mode(targetMode);
   WiFi.begin(wifiConfiguredSsid.c_str(), wifiConfiguredPassword.c_str());
   wifiConnecting = true;
   wifiAttemptStartedAt = millis();
@@ -772,7 +773,9 @@ void registerAdminRoutes() {
 
 bool startAdminAccessPoint() {
   if (!fingerOK) Serial.println("[ADMIN] WARNING: fingerprint sensor is not ready");
-  WiFi.mode(wifiHasCredentials ? WIFI_AP_STA : WIFI_AP);
+  // Always start AP+STA so submitting router credentials never requires
+  // switching Wi-Fi mode while the admin browser is connected.
+  WiFi.mode(WIFI_AP_STA);
   IPAddress localIP(192, 168, 4, 1);
   IPAddress gateway(192, 168, 4, 1);
   IPAddress subnet(255, 255, 255, 0);
