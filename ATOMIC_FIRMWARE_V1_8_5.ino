@@ -372,6 +372,16 @@ String getOperatorName(uint16_t id) {
   return String(fallback);
 }
 
+void clearLegacyPlaceholderNames() {
+  if (!preferencesOK) return;
+  const char* keys[] = {"op001", "op002", "op003"};
+  const char* placeholders[] = {"OPERATOR 01", "OPERATOR 02", "OPERATOR 03"};
+  for (uint8_t i = 0; i < 3; i++) {
+    String saved = operatorPrefs.getString(keys[i], "");
+    if (saved == placeholders[i]) operatorPrefs.remove(keys[i]);
+  }
+}
+
 bool requireAdminAuth() {
   if (!adminModeActive) {
     adminServer.send(403, "application/json", "{\"ok\":false,\"error\":\"Admin mode is inactive\"}");
@@ -1297,6 +1307,7 @@ void setup() {
 
   preferencesOK = operatorPrefs.begin("pc200ops", false);
   Serial.println(preferencesOK ? "OPERATOR NVS OK" : "OPERATOR NVS ERROR");
+  if (preferencesOK) clearLegacyPlaceholderNames();
 
   if (fingerOK) ledWaiting();
   else ledSystemFailure();
