@@ -386,7 +386,22 @@ uint8_t readFingerprintIndexPage(uint8_t page, uint8_t *indexTable) {
   if (responsePacket.type != FINGERPRINT_ACKPACKET) return FINGERPRINT_PACKETRESPONSEFAIL;
 
   // ACK: 1 byte confirmation + 32 byte index table + 2 byte checksum.
-  if (responsePacket.length < 35) return FINGERPRINT_BADPACKET;
+  if (responsePacket.length < 35 || responsePacket.length > sizeof(responsePacket.data)) {
+    return FINGERPRINT_BADPACKET;
+  }
+
+  // Validasi checksum respons agar bit okupansi tidak dibaca dari paket korup.
+  uint16_t checksum = (responsePacket.length >> 8) +
+                      (responsePacket.length & 0xFF) +
+                      responsePacket.type;
+  for (uint16_t i = 0; i < responsePacket.length - 2; i++) {
+    checksum += responsePacket.data[i];
+  }
+  uint16_t receivedChecksum =
+    ((uint16_t)responsePacket.data[responsePacket.length - 2] << 8) |
+    responsePacket.data[responsePacket.length - 1];
+  if (checksum != receivedChecksum) return FINGERPRINT_BADPACKET;
+
   if (responsePacket.data[0] != FINGERPRINT_OK) return responsePacket.data[0];
 
   for (uint8_t i = 0; i < 32; i++) {
