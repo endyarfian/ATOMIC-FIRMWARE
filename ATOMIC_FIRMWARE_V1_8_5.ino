@@ -559,7 +559,7 @@ const char ADMIN_HTML[] PROGMEM = R"PC200HTML(
 <section><h2>Operators</h2><div id="operators">Loading…</div><button onclick="loadOperators()">Refresh operators</button></section>
 <p id="message" class="muted"></p><p class="muted" style="text-align: center">ATOMIC SYSTEM © 2026, <a href="https://endyarfian.github.io" target="_blank" rel="noopener noreferrer" style="color: orange;">ENLISTERS TECHNOLOGY</a>.</p></main><script>
 const $=id=>document.getElementById(id);const api = async (path,method='GET',data=null) => {let o={method,headers:{}};if(data){o.headers['Content-Type']='application/x-www-form-urlencoded';o.body=new URLSearchParams(data)}let r=await fetch(path,o);let j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'Request failed');return j}
-const refreshStatus = async () => {try{let s=await api('/api/status');$('status').textContent=`Admin: ${s.admin?'ACTIVE':'INACTIVE'} | Fingerprint: ${s.fingerprint?'READY':'ERROR'} | Templates: ${s.templates} | AP: ${s.ip}`}catch(e){$('status').textContent=e.message}}
+const refreshStatus = async () => {try{let s=await api('/api/status');$('status').textContent=`Device ID: ${s.device_id} | Firmware: ${s.firmware_version} | Admin: ${s.admin?'ACTIVE':'INACTIVE'} | Fingerprint: ${s.fingerprint?'READY':'ERROR'} | Templates: ${s.templates} | AP: ${s.ip}`}catch(e){$('status').textContent=e.message}}
 const loadOperators = async () => {try{let j=await api('/api/operators');$('operators').innerHTML='';if(!j.operators.length){$('operators').textContent='No operator metadata';return}j.operators.forEach(o=>{let d=document.createElement('div');d.className='operator';let label=document.createElement('span');label.textContent=`ID ${o.id} — ${o.name}`;let edit=document.createElement('button');edit.textContent='Rename';edit.onclick=async()=>{let n=prompt('New operator name',o.name);if(n&&n.trim()){try{await api('/api/operator/rename','POST',{id:o.id,name:n.trim()});await loadOperators()}catch(e){alert(e.message)}}};let del=document.createElement('button');del.className='danger';del.textContent='Delete';del.onclick=async()=>{if(confirm(`Delete fingerprint ID ${o.id}?`)){try{await api('/api/operator/delete','POST',{id:o.id});await loadOperators();await refreshStatus()}catch(e){alert(e.message)}}};d.append(label,edit,del);$('operators').append(d)})}catch(e){$('operators').textContent=e.message}}
 $('enrollForm').onsubmit=async e=>{e.preventDefault();try{let j=await api('/api/enroll/start','POST',{id:$('opid').value,name:$('opname').value.trim()});$('enrollStatus').textContent=j.message;$('cancelEnroll').hidden=false;pollEnroll()}catch(e){alert(e.message)}};
 let poller=null;const pollEnroll = async () => {if(poller)clearInterval(poller);poller=setInterval(async()=>{try{let j=await api('/api/enroll/status');$('enrollStatus').textContent=j.state+' — '+j.message;if(j.state==='Completed'||j.state==='Failed'||j.state==='Idle'){clearInterval(poller);poller=null;$('cancelEnroll').hidden=true;loadOperators();refreshStatus()}}catch(e){$('enrollStatus').textContent=e.message;clearInterval(poller);poller=null}},900)}
@@ -576,7 +576,9 @@ void registerAdminRoutes() {
   adminServer.on("/api/status", HTTP_GET, []() {
     if (!requireAdminAuth()) return;
     if (fingerOK) finger.getTemplateCount();
-    String json = "{\"ok\":true,\"admin\":true,\"fingerprint\":" + String(fingerOK ? "true" : "false") +
+    String json = "{\"ok\":true,\"admin\":true,\"device_id\":\"" + String(DEVICE_ID) +
+      "\",\"firmware_version\":\"" + String(FIRMWARE_VERSION) +
+      "\",\"fingerprint\":" + String(fingerOK ? "true" : "false") +
       ",\"templates\":" + String(fingerOK ? finger.templateCount : 0) +
       ",\"ip\":\"" + WiFi.softAPIP().toString() + "\"}";
     adminServer.send(200, "application/json", json);
