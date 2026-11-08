@@ -9,8 +9,12 @@
 #include <WebServer.h>
 #include <Preferences.h>
 
+// ================= A.T.O.M. IDENTITY =====================
+#define DEVICE_ID "ATOMIC-001"
+#define FIRMWARE_VERSION "1.8.0"
+
 // ============================================================
-// A.T.O.M. (Access, Tracking & Operation Monitoring) - ADMIN MODE V1.7.5
+// A.T.O.M. (Access, Tracking & Operation Monitoring) - ADMIN MODE V1.8.0
 // ESP32-S3 DevKitC-1 N16R8
 // ============================================================
 
@@ -810,10 +814,10 @@ void drawInformationScreenA(GFXcanvas1 &c) {
 }
 
 void drawInformationScreenB(GFXcanvas1 &c) {
-  drawCenteredHeader(c, "INFORMATION");
-  drawCenteredTextAtY(c, "ATOMIC FIRMWARE", 25, 1);
-  drawCenteredTextAtY(c, "V1.7.5", 39, 1);
-  drawCenteredTextAtY(c, "192.168.4.1", 53, 1);
+  drawCenteredHeader(c, "DEVICE ID");
+  drawCenteredTextAtY(c, DEVICE_ID, 30, 1);
+  drawCenteredTextAtY(c, "A.T.O.M.", 44, 1);
+  drawCenteredTextAtY(c, FIRMWARE_VERSION, 56, 1);
 }
 
 void drawAdminScreenA(GFXcanvas1 &c) {
@@ -1207,7 +1211,8 @@ void setup() {
   Serial.println();
   Serial.println("========================================");
   Serial.println("A.T.O.M. - Access, Tracking & Operation Monitoring");
-  Serial.println("ADMIN MODE V1.7.5");
+  Serial.print("FIRMWARE VERSION: "); Serial.println(FIRMWARE_VERSION);
+  Serial.print("DEVICE ID: "); Serial.println(DEVICE_ID);
   Serial.println("========================================");
 
   rgbLed.begin();
