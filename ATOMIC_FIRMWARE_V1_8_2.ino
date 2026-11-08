@@ -379,7 +379,8 @@ uint8_t readFingerprintIndexPage(uint8_t page, uint8_t *indexTable) {
   );
   finger.writeStructuredPacket(commandPacket);
 
-  Adafruit_Fingerprint_Packet responsePacket(FINGERPRINT_ACKPACKET, 0, nullptr);
+  uint8_t responsePlaceholder = 0;
+  Adafruit_Fingerprint_Packet responsePacket(FINGERPRINT_ACKPACKET, 0, &responsePlaceholder);
   uint8_t packetResult = finger.getStructuredPacket(&responsePacket, 1200);
   if (packetResult != FINGERPRINT_OK) return packetResult;
   if (responsePacket.type != FINGERPRINT_ACKPACKET) return FINGERPRINT_PACKETRESPONSEFAIL;
