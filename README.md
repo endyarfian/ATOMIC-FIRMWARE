@@ -2,12 +2,23 @@
 
 **A.T.O.M. — Access, Tracking & Operation Monitoring**
 
-Firmware akses biometrik berbasis ESP32-S3. Ringkasan fitur, perangkat keras, lingkungan pengembangan, petunjuk penggunaan, dan catatan keselamatan tersedia pada README di branch `main`.
+Firmware akses biometrik berbasis ESP32-S3.
 
 ## Versi
 
-Source pada branch ini adalah **A.T.O.M. V1.7.5**. File firmware: `ATOMIC_FIRMWARE_V1_7_5.ino`.
+Branch ini adalah pengembangan **A.T.O.M. V1.8.0** dari baseline stabil V1.7.5.
 
-Fitur versi ini mencakup menu OLED INFORMATION setelah ADMIN MODE dan sebelum LOGO, dengan informasi nama firmware, versi, dan alamat IP Admin Mode.
+File firmware: `ATOMIC_FIRMWARE_V1_8_0.ino`.
 
-Lakukan kompilasi dan pengujian bench sebelum penggunaan. Keberadaan source tidak berarti firmware telah lolos kompilasi atau pengujian perangkat.
+## Perubahan awal V1.8.0
+
+- Identitas perangkat ditetapkan melalui konstanta `DEVICE_ID`.
+- Menu INFORMATION menampilkan header **DEVICE ID**, nilai Device ID, nama sistem, dan versi firmware.
+- Device ID prototipe saat ini: `ATOMIC-001`.
+- V1.7.5 tetap dipertahankan sebagai branch baseline terpisah.
+
+## Status pengembangan
+
+V1.8.0 masih dalam tahap pengembangan. Perubahan komunikasi MQTT, sinkronisasi operator, event akses, enrollment, dan sesi akan ditambahkan dan diuji bertahap.
+
+Lakukan kompilasi dan pengujian bench pada ESP32-S3 sebelum penggunaan. Source yang tersimpan di repository belum berarti firmware telah lolos kompilasi atau pengujian perangkat.
