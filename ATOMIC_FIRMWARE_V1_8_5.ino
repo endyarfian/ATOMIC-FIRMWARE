@@ -385,6 +385,23 @@ bool requireAdminAuth() {
   return true;
 }
 
+// ---------- Fingerprint enrollment state machine ----------
+enum EnrollState : uint8_t {
+  ENROLL_IDLE = 0,
+  ENROLL_WAIT_FIRST,
+  ENROLL_WAIT_REMOVE,
+  ENROLL_WAIT_SECOND,
+  ENROLL_DONE,
+  ENROLL_FAILED
+};
+
+EnrollState enrollState = ENROLL_IDLE;
+uint16_t enrollTargetId = 0;
+String enrollTargetName = "";
+String enrollMessage = "Idle";
+unsigned long enrollStartedAt = 0;
+unsigned long enrollLastPoll = 0;
+
 // ---------- Admin RGB indicator (non-blocking) ----------
 enum AdminLedState : uint8_t { ADMIN_LED_IDLE = 0, ADMIN_LED_SUCCESS, ADMIN_LED_FAILURE };
 AdminLedState adminLedState = ADMIN_LED_IDLE;
@@ -423,22 +440,6 @@ void updateAdminRgbIndicator() {
   }
 }
 
-// ---------- Fingerprint enrollment state machine ----------
-enum EnrollState : uint8_t {
-  ENROLL_IDLE = 0,
-  ENROLL_WAIT_FIRST,
-  ENROLL_WAIT_REMOVE,
-  ENROLL_WAIT_SECOND,
-  ENROLL_DONE,
-  ENROLL_FAILED
-};
-
-EnrollState enrollState = ENROLL_IDLE;
-uint16_t enrollTargetId = 0;
-String enrollTargetName = "";
-String enrollMessage = "Idle";
-unsigned long enrollStartedAt = 0;
-unsigned long enrollLastPoll = 0;
 
 const char* enrollStateText() {
   switch (enrollState) {
