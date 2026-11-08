@@ -6,10 +6,11 @@ Firmware sistem akses biometrik berbasis ESP32-S3.
 
 ## Versi dan baseline
 
-**V1.8.5 tetap menjadi baseline resmi; V1.9.0 adalah pengembangan berikutnya yang dibuat langsung dari baseline tersebut.**
+**V1.8.5 tetap menjadi baseline resmi; V1.9.0 dan V1.9.1 merupakan pengembangan berurutan di atas baseline tersebut.**
 
 - Baseline: branch `v1.8.5` — `ATOMIC_FIRMWARE_V1_8_5.ino`
-- Pengembangan: branch `v1.9.0` — `ATOMIC_FIRMWARE_V1_9_0.ino`
+- Pengembangan Wi-Fi: branch `v1.9.0` — `ATOMIC_FIRMWARE_V1_9_0.ino`
+- Pengembangan MQTT: branch `v1.9.1` — `ATOMIC_FIRMWARE_V1_9_1.ino`
 - Device ID prototipe: `ATOMIC-001`
 - V1.8.5 dikembangkan langsung dari V1.8.0.
 - V1.8.1–V1.8.4 tidak digunakan sebagai basis pengembangan karena memiliki bug.
@@ -84,6 +85,22 @@ Firmware sistem akses biometrik berbasis ESP32-S3.
 - Endpoint Admin: `POST /api/wifi/configure` dan `GET /api/wifi/status`.
 - Status MQTT belum diimplementasikan pada firmware V1.9.0; koneksi Wi-Fi yang berhasil tidak berarti MQTT sudah tersambung.
 
+## Perubahan V1.9.1 — MQTT telemetry
+
+- Menambahkan MQTT client menggunakan library **PubSubClient** (Nick O'Leary); install melalui Arduino IDE Library Manager.
+- Broker awal: `192.168.0.128:1883`; client ID: `ATOMIC-001`; username awal: `atomic_device_001`.
+- Password MQTT harus diisi melalui bagian **MQTT Configuration** di Web Admin; password disimpan di namespace NVS terpisah (`atomicmqtt`) dan tidak dikirim kembali melalui endpoint status atau dicetak ke Serial.
+- MQTT hanya mulai tersambung setelah Wi-Fi STA terhubung dan kredensial MQTT disimpan.
+- Reconnect dicoba berkala (10 detik); heartbeat dikirim setiap 30 detik.
+- Topik:
+  - `atomic/devices/ATOMIC-001/heartbeat` — status online, firmware, IP, RSSI, jumlah template, dan timestamp RTC.
+  - `atomic/devices/ATOMIC-001/events` — `ACCESS_GRANTED` / `ACCESS_DENIED`, operator, fingerprint slot, dan waktu kejadian.
+  - `atomic/devices/ATOMIC-001/sessions` — `SESSION_STARTED` / `SESSION_ENDED`, operator, timestamp, dan durasi sesi dalam detik.
+- Endpoint Admin: `GET /api/mqtt/status` dan `POST /api/mqtt/configure`.
+- Status MQTT ditampilkan terpisah dari status Wi-Fi pada Web Admin.
+- Timestamp menggunakan RTC DS3231. Jika RTC tidak tersedia, field waktu berisi `RTC_UNAVAILABLE`.
+- Publikasi menggunakan MQTT QoS 0. Pada implementasi awal ini, event yang terjadi ketika broker terputus tidak disimpan untuk pengiriman ulang; event akan dicatat di Serial sebagai tidak terkirim. Pastikan broker tersambung untuk pencatatan real-time.
+
 ## Konfigurasi perangkat
 
 Target perangkat pengembangan:
@@ -101,6 +118,6 @@ Kredensial SoftAP dan Web Admin di atas merupakan kredensial prototipe. Ganti kr
 
 ## Status pengujian dan pengembangan
 
-V1.8.5 tetap menjadi baseline resmi dan V1.9.0 merupakan pengembangan pertama di atas baseline tersebut.
+V1.8.5 tetap menjadi baseline resmi. V1.9.0 menambahkan Wi-Fi STA dan V1.9.1 menambahkan integrasi MQTT.
 
-Source di repository belum otomatis berarti firmware telah lolos kompilasi atau pengujian perangkat. Lakukan Verify/Compile di Arduino IDE dan pengujian bench pada ESP32-S3 sebelum digunakan. Integrasi MQTT, sinkronisasi data operator, pencatatan event akses, dan manajemen sesi belum termasuk implementasi V1.9.0 dan akan dikembangkan serta diuji secara bertahap.
+Source di repository belum otomatis berarti firmware telah lolos kompilasi atau pengujian perangkat. Lakukan Verify/Compile di Arduino IDE dan pengujian bench pada ESP32-S3 sebelum digunakan. Sinkronisasi data operator ke backend dan penyimpanan event saat MQTT offline belum termasuk implementasi V1.9.1 dan dapat dikembangkan pada versi berikutnya.
