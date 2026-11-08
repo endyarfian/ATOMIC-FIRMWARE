@@ -507,8 +507,9 @@ void registerAdminRoutes() {
     if (fingerOK) finger.getTemplateCount();
     String json = "{\"ok\":true,\"admin\":true,\"fingerprint\":" + String(fingerOK ? "true" : "false") +
       ",\"templates\":" + String(fingerOK ? finger.templateCount : 0) +
-      ",\"deviceId\":\"" + String(DEVICE_ID) + "\",\"firmwareVersion\":\"" + String(FIRMWARE_VERSION) +\"",
-      ",\"ip\":\"" + WiFi.softAPIP().toString() + "\"}";
+      ",\"deviceId\":\"" + String(DEVICE_ID) +
+      "\",\"firmwareVersion\":\"" + String(FIRMWARE_VERSION) +
+      "\",\"ip\":\"" + WiFi.softAPIP().toString() + "\"}";
     adminServer.send(200, "application/json", json);
   });
 
