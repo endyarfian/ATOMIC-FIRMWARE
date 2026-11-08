@@ -15,7 +15,7 @@
 #define FIRMWARE_VERSION "1.9.1"
 
 // ============================================================
-// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI CONFIGURATION V1.9.0
+// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI + MQTT INTEGRATION V1.9.1
 // ESP32-S3 DevKitC-1 N16R8
 // ============================================================
 
