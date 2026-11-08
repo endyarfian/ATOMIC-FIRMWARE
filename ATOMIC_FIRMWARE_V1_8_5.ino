@@ -80,7 +80,7 @@ void setRGB(uint8_t r, uint8_t g, uint8_t b) {
 
 void ledWaiting()      { setRGB(0, 0, 255); }
 void ledGranted()      { setRGB(0, 255, 0); }
-void ledDenied()       { setRGB(255, 100, 0); }
+void ledDenied()       { setRGB(255, 0, 0); }
 void ledSystemFailure(){ setRGB(255, 0, 0); }
 void ledOff()          { setRGB(0, 0, 0); }
 
@@ -413,7 +413,7 @@ unsigned long enrollStartedAt = 0;
 unsigned long enrollLastPoll = 0;
 
 // ---------- Admin RGB indicator (non-blocking) ----------
-enum AdminLedState : uint8_t { ADMIN_LED_IDLE = 0, ADMIN_LED_SUCCESS, ADMIN_LED_FAILURE };
+enum AdminLedState : uint8_t { ADMIN_LED_IDLE = 0, ADMIN_LED_ENROLLMENT, ADMIN_LED_SUCCESS, ADMIN_LED_FAILURE };
 AdminLedState adminLedState = ADMIN_LED_IDLE;
 unsigned long adminLedChangedAt = 0;
 unsigned long adminLedBreathAt = 0;
@@ -423,6 +423,25 @@ int8_t adminLedDirection = 1;
 
 void updateAdminRgbIndicator() {
   unsigned long now = millis();
+
+  bool enrollmentInProgress =
+    enrollState == ENROLL_WAIT_FIRST ||
+    enrollState == ENROLL_WAIT_REMOVE ||
+    enrollState == ENROLL_WAIT_SECOND;
+
+  if (enrollmentInProgress) {
+    if (adminLedState != ADMIN_LED_ENROLLMENT) {
+      adminLedState = ADMIN_LED_ENROLLMENT;
+      adminLedChangedAt = now;
+      adminLedOn = true;
+    }
+    if (now - adminLedChangedAt >= 300) {
+      adminLedChangedAt = now;
+      adminLedOn = !adminLedOn;
+    }
+    setRGB(adminLedOn ? 255 : 0, adminLedOn ? 80 : 0, 0);
+    return;
+  }
 
   if (enrollState == ENROLL_DONE || enrollState == ENROLL_FAILED) {
     AdminLedState target = (enrollState == ENROLL_DONE) ? ADMIN_LED_SUCCESS : ADMIN_LED_FAILURE;
