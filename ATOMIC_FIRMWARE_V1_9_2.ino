@@ -489,8 +489,8 @@ bool publishOperatorUpsert(uint16_t operatorId, const String &operatorName) {
     "\",\"fingerprint_slot\":" + String(operatorId) +
     ",\"occurred_at\":\"" + atomTimestamp() + "\"}";
   bool published = mqttPublishJson("operators", payload);
-  if (!published) Serial.printf("[MQTT][OPERATORS] UPSERT not published for ID %u (MQTT disconnected or publish failed)\\n", (unsigned)operatorId);
-  else Serial.printf("[MQTT][OPERATORS] UPSERT published for ID %u\\n", (unsigned)operatorId);
+  if (!published) Serial.printf("[MQTT][OPERATORS] UPSERT not published for ID %u (MQTT disconnected or publish failed)\n", (unsigned)operatorId);
+  else Serial.printf("[MQTT][OPERATORS] UPSERT published for ID %u\n", (unsigned)operatorId);
   return published;
 }
 
@@ -502,8 +502,8 @@ bool publishOperatorDeleted(uint16_t operatorId) {
     ",\"fingerprint_slot\":" + String(operatorId) +
     ",\"occurred_at\":\"" + atomTimestamp() + "\"}";
   bool published = mqttPublishJson("operators", payload);
-  if (!published) Serial.printf("[MQTT][OPERATORS] DELETE not published for ID %u (MQTT disconnected or publish failed)\\n", (unsigned)operatorId);
-  else Serial.printf("[MQTT][OPERATORS] DELETE published for ID %u\\n", (unsigned)operatorId);
+  if (!published) Serial.printf("[MQTT][OPERATORS] DELETE not published for ID %u (MQTT disconnected or publish failed)\n", (unsigned)operatorId);
+  else Serial.printf("[MQTT][OPERATORS] DELETE published for ID %u\n", (unsigned)operatorId);
   return published;
 }
 void publishAccessEvent(bool granted) {
