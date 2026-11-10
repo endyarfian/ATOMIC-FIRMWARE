@@ -16,7 +16,7 @@
 #define FIRMWARE_VERSION "1.9.3"
 
 // ============================================================
-// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI + MQTT INTEGRATION V1.9.2
+// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI + MQTT + RELAY + IGNITION V1.9.3
 // ESP32-S3 DevKitC-1 N16R8
 // ============================================================
 
@@ -504,8 +504,6 @@ void updateIgnition() {
   ignitionOn = rawOn;
   lastActivityMs = now;
   Serial.printf("[IGNITION] %s\n", ignitionOn ? "ON" : "OFF");
-  publishIgnitionState(ignitionOn);
-
   if (!ignitionOn && sessionActive) {
     Serial.println("[SESSION] Ignition OFF; closing active session");
     setRelay(false);
@@ -516,6 +514,7 @@ void updateIgnition() {
     menuIndex = 0;
     screenDirty = true;
   }
+  publishIgnitionState(ignitionOn);
 }
 
 void updateAutoSleep() {
