@@ -1939,12 +1939,12 @@ void updateFingerprint() {
     matchedID = finger.fingerID;
     confidence = finger.confidence;
     activeOperatorName = getOperatorName(matchedID);
-    if (ignitionOn) {
-      showAuthenticationResult(true);
-    } else {
-      Serial.println("[AUTH] Fingerprint matched but ignition is OFF; access blocked");
-      showAuthenticationResult(false);
-    }
+    // All-state authentication: a valid fingerprint grants full access
+    // regardless of ignition state. Ignition remains an independent input
+    // used for telemetry and other system behavior.
+    Serial.printf("[AUTH] Fingerprint matched; ignition=%s; granting full access\n",
+      ignitionOn ? "ON" : "OFF");
+    showAuthenticationResult(true);
   } else {
     if (p != FINGERPRINT_NOTFOUND) {
       Serial.print("[FP] SEARCH ERROR: "); Serial.println(p);
