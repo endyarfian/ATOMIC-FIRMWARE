@@ -588,13 +588,13 @@ static void mqttEventHandler(void* handlerArgs, esp_event_base_t base, int32_t e
   if (eventId == MQTT_EVENT_CONNECTED) {
     mqttConnected = true;
     mqttLastHeartbeat = 0;
-    Serial.printf("[MQTT] Connected via %s\\n", mqttTransportText(mqttCurrentTransport));
+    Serial.printf("[MQTT] Connected via %s\n", mqttTransportText(mqttCurrentTransport));
   } else if (eventId == MQTT_EVENT_DISCONNECTED) {
     mqttConnected = false;
-    Serial.printf("[MQTT] Disconnected from %s\\n", mqttTransportText(mqttCurrentTransport));
+    Serial.printf("[MQTT] Disconnected from %s\n", mqttTransportText(mqttCurrentTransport));
   } else if (eventId == MQTT_EVENT_ERROR) {
     mqttConnected = false;
-    Serial.printf("[MQTT] Transport error on %s\\n", mqttTransportText(mqttCurrentTransport));
+    Serial.printf("[MQTT] Transport error on %s\n", mqttTransportText(mqttCurrentTransport));
   }
 }
 
@@ -807,6 +807,7 @@ void updateMqtt() {
   unsigned long now = millis();
   if (mqttEspClient == nullptr) {
     if (now - mqttLastConnectAttempt < MQTT_RECONNECT_INTERVAL) return;
+    mqttLastConnectAttempt = now;
     startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
     return;
   }
@@ -815,15 +816,15 @@ void updateMqtt() {
     if (now - mqttLastHeartbeat >= MQTT_HEARTBEAT_INTERVAL) {
       mqttLastHeartbeat = now;
       if (fingerOK) finger.getTemplateCount();
-      String payload = "{\\\"device_id\\\":\\\"" + String(DEVICE_ID) +
-        "\\\",\\\"firmware_version\\\":\\\"" + String(FIRMWARE_VERSION) +
-        "\\\",\\\"status\\\":\\\"online\\\",\\\"ip\\\":\\\"" + WiFi.localIP().toString() +
-        "\\\",\\\"rssi\\\":" + String(WiFi.RSSI()) +
-        ",\\\"templates\\\":" + String(fingerOK ? finger.templateCount : 0) +
-        ",\\\"ignition_state\\\":\\\"" + String(ignitionOn ? "ON" : "OFF") + "\\\"" +
-        ",\\\"relay_state\\\":\\\"" + String(relayActive ? "ON" : "OFF") + "\\\"" +
-        ",\\\"session_active\\\":" + String(sessionActive ? "true" : "false") +
-        ",\\\"occurred_at\\\":\\\"" + atomTimestamp() + "\\\"}";
+      String payload = "{\\"device_id\\":\\"" + String(DEVICE_ID) +
+        "\\",\\"firmware_version\\":\\"" + String(FIRMWARE_VERSION) +
+        "\\",\\"status\\":\\"online\\",\\"ip\\":\\"" + WiFi.localIP().toString() +
+        "\\",\\"rssi\\":" + String(WiFi.RSSI()) +
+        ",\\"templates\\":" + String(fingerOK ? finger.templateCount : 0) +
+        ",\\"ignition_state\\":\\"" + String(ignitionOn ? "ON" : "OFF") + "\\"" +
+        ",\\"relay_state\\":\\"" + String(relayActive ? "ON" : "OFF") + "\\"" +
+        ",\\"session_active\\":" + String(sessionActive ? "true" : "false") +
+        ",\\"occurred_at\\":\\"" + atomTimestamp() + "\\"}";
       mqttPublishJson("heartbeat", payload);
     }
     if (mqttCurrentTransport == MQTT_TRANSPORT_INTERNET_WSS &&
@@ -1180,14 +1181,14 @@ void registerAdminRoutes() {
   adminServer.on("/api/mqtt/status", HTTP_GET, []() {
     if (!requireAdminAuth(false)) return;
     String state = mqttConnected ? "connected" : (mqttHasCredentials ? (WiFi.status() == WL_CONNECTED ? "connecting" : "waiting_for_wifi") : "not_configured");
-    String json = "{\\\"ok\\\":true,\\\"configured\\\":" + String(mqttHasCredentials ? "true" : "false") +
-      ",\\\"connected\\\":" + String(mqttConnected ? "true" : "false") +
-      ",\\\"status\\\":\\\"" + state + "\\\"" +
-      ",\\\"active_transport\\\":\\\"" + mqttTransportText(mqttCurrentTransport) + "\\\"" +
-      ",\\\"active_endpoint\\\":\\\"" + jsonEscape(mqttClientUri) + "\\\"" +
-      ",\\\"wss_endpoint\\\":\\\"" + String(MQTT_WSS_URI) + "\\\"" +
-      ",\\\"host\\\":\\\"" + jsonEscape(mqttBrokerHost) +
-      "\\\",\\\"port\\\":" + String(mqttBrokerPort) + ",\\\"username\\\":\\\"" + jsonEscape(mqttUsername) + "\\\"}";
+    String json = "{\\"ok\\":true,\\"configured\\":" + String(mqttHasCredentials ? "true" : "false") +
+      ",\\"connected\\":" + String(mqttConnected ? "true" : "false") +
+      ",\\"status\\":\\"" + state + "\\"" +
+      ",\\"active_transport\\":\\"" + mqttTransportText(mqttCurrentTransport) + "\\"" +
+      ",\\"active_endpoint\\":\\"" + jsonEscape(mqttClientUri) + "\\"" +
+      ",\\"wss_endpoint\\":\\"" + String(MQTT_WSS_URI) + "\\"" +
+      ",\\"host\\":\\"" + jsonEscape(mqttBrokerHost) +
+      "\\",\\"port\\":" + String(mqttBrokerPort) + ",\\"username\\":\\"" + jsonEscape(mqttUsername) + "\\"}";
     adminServer.send(200, "application/json", json);
   });
   adminServer.on("/api/mqtt/configure", HTTP_POST, []() {
