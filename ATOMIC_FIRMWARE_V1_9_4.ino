@@ -629,32 +629,53 @@ bool startMqttTransport(MqttTransport transport) {
   }
   esp_err_t eventResult = esp_mqtt_client_register_event(mqttEspClient, ESP_EVENT_ANY_ID, mqttEventHandler, nullptr);
   if (eventResult != ESP_OK) {
-    Serial.printf("[MQTT] Event registration failed: %d\\n", (int)eventResult);
+    Serial.printf("[MQTT] Event registration failed: %d\n", (int)eventResult);
     esp_mqtt_client_destroy(mqttEspClient); mqttEspClient = nullptr;
     mqttCurrentTransport = MQTT_TRANSPORT_NONE; mqttClientUri = "";
     return false;
   }
   esp_err_t startResult = esp_mqtt_client_start(mqttEspClient);
   if (startResult != ESP_OK) {
-    Serial.printf("[MQTT] Client start failed: %d\\n", (int)startResult);
+    Serial.printf("[MQTT] Client start failed: %d\n", (int)startResult);
     esp_mqtt_client_destroy(mqttEspClient); mqttEspClient = nullptr;
     mqttCurrentTransport = MQTT_TRANSPORT_NONE; mqttClientUri = "";
     return false;
   }
   mqttAttemptStartedAt = millis();
   mqttLastConnectAttempt = mqttAttemptStartedAt;
-  Serial.printf("[MQTT] Starting %s via %s\\n", mqttTransportText(transport), mqttClientUri.c_str());
+  Serial.printf("[MQTT] Starting %s via %s\n", mqttTransportText(transport), mqttClientUri.c_str());
   return true;
 }
 
-bool probeLanMqttBroker() {
-  if (WiFi.status() != WL_CONNECTED || !mqttBrokerHost.length()) return false;
+volatile bool mqttLanProbeRunning = false;
+volatile bool mqttLanProbeCompleted = false;
+volatile bool mqttLanProbeReachable = false;
+
+static void mqttLanProbeTask(void* parameter) {
+  (void)parameter;
   WiFiClient probeClient;
   probeClient.setTimeout(MQTT_LAN_PROBE_TIMEOUT);
-  bool reachable = probeClient.connect(mqttBrokerHost.c_str(), mqttBrokerPort, MQTT_LAN_PROBE_TIMEOUT);
+  bool reachable = WiFi.status() == WL_CONNECTED &&
+    probeClient.connect(mqttBrokerHost.c_str(), mqttBrokerPort, MQTT_LAN_PROBE_TIMEOUT);
   probeClient.stop();
-  Serial.printf("[MQTT] LAN broker TCP probe: %s\\n", reachable ? "reachable" : "unreachable");
-  return reachable;
+  mqttLanProbeReachable = reachable;
+  mqttLanProbeCompleted = true;
+  mqttLanProbeRunning = false;
+  vTaskDelete(nullptr);
+}
+
+void requestLanMqttProbe() {
+  if (mqttLanProbeRunning || mqttLanProbeCompleted) return;
+  mqttLanProbeRunning = true;
+  BaseType_t taskResult = xTaskCreate(
+    mqttLanProbeTask, "mqttLanProbe", 4096, nullptr, 1, nullptr
+  );
+  if (taskResult != pdPASS) {
+    mqttLanProbeRunning = false;
+    mqttLanProbeReachable = false;
+    mqttLanProbeCompleted = true;
+    Serial.println("[MQTT] Could not create LAN probe task");
+  }
 }
 
 String activeSessionId = "";
@@ -827,12 +848,19 @@ void updateMqtt() {
         ",\"occurred_at\":\"" + atomTimestamp() + "\"}";
       mqttPublishJson("heartbeat", payload);
     }
-    if (mqttCurrentTransport == MQTT_TRANSPORT_INTERNET_WSS &&
-        now - mqttLastLanProbeAt >= MQTT_LAN_PROBE_INTERVAL) {
-      mqttLastLanProbeAt = now;
-      if (probeLanMqttBroker()) {
-        Serial.println("[MQTT] LAN restored; switching WSS -> LAN TCP");
-        startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
+    if (mqttCurrentTransport == MQTT_TRANSPORT_INTERNET_WSS) {
+      if (!mqttLanProbeRunning && !mqttLanProbeCompleted &&
+          now - mqttLastLanProbeAt >= MQTT_LAN_PROBE_INTERVAL) {
+        mqttLastLanProbeAt = now;
+        requestLanMqttProbe();
+      }
+      if (mqttLanProbeCompleted) {
+        bool lanReachable = mqttLanProbeReachable;
+        mqttLanProbeCompleted = false;
+        if (lanReachable) {
+          Serial.println("[MQTT] LAN restored; switching WSS -> LAN TCP");
+          startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
+        }
       }
     }
     return;
@@ -848,14 +876,21 @@ void updateMqtt() {
     return;
   }
 
-  if (now - mqttLastLanProbeAt >= MQTT_RECONNECT_INTERVAL) {
+  if (!mqttLanProbeRunning && !mqttLanProbeCompleted &&
+      now - mqttLastLanProbeAt >= MQTT_RECONNECT_INTERVAL) {
     mqttLastLanProbeAt = now;
-    if (probeLanMqttBroker()) {
+    requestLanMqttProbe();
+    return;
+  }
+  if (mqttLanProbeCompleted) {
+    bool lanReachable = mqttLanProbeReachable;
+    mqttLanProbeCompleted = false;
+    if (lanReachable) {
       startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
-      return;
+    } else {
+      startMqttTransport(MQTT_TRANSPORT_INTERNET_WSS);
     }
   }
-  startMqttTransport(MQTT_TRANSPORT_INTERNET_WSS);
 }
 
 // ---------- Fingerprint enrollment state machine ----------
