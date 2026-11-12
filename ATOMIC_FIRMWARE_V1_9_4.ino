@@ -602,7 +602,7 @@ bool startMqttTransport(uint8_t transport) {
   stopMqttClient();
   if (WiFi.status() != WL_CONNECTED || !mqttHasCredentials) return false;
 
-  mqttCurrentTransport = transport;
+  mqttCurrentTransport = static_cast<MqttTransport>(transport);
   mqttClientUri = (transport == MQTT_TRANSPORT_LAN_TCP)
     ? ("mqtt://" + mqttBrokerHost + ":" + String(mqttBrokerPort))
     : String(MQTT_WSS_URI);
