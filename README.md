@@ -1,91 +1,155 @@
-# ATOMIC FIRMWARE
+# A.T.O.M. — Access, Tracking & Operation Monitoring
 
-**A.T.O.M. — Access, Tracking & Operation Monitoring**
+**ATOMIC FIRMWARE** is an ESP32-S3-based biometric access-control and operator-monitoring prototype developed for a Komatsu PC200 application.
 
-Firmware sistem akses biometrik berbasis ESP32-S3.
+> **Prototype and safety notice:** This repository documents development firmware and bench testing. The project has not been validated as a certified machine safety or anti-theft system, nor confirmed for installation into OEM excavator wiring. Do not bypass OEM interlocks. Validate electrical isolation, relay fail-safe behavior, power transients, environmental durability, and machine-specific integration before any field use.
 
-## Versi dan baseline
+## Branch snapshot
 
-**V1.8.5 ditetapkan sebagai benchmark/baseline pengembangan firmware A.T.O.M. saat ini.**
+- **Branch:** `v1.8.5`
+- **Firmware file:** `ATOMIC_FIRMWARE_V1_8_5.ino`
+- **Focus:** Stable Admin Mode and operator-management benchmark
+- **Device ID used in the prototype:** `ATOMIC-001`
 
-- Branch aktif: `v1.8.5`
-- File firmware: `ATOMIC_FIRMWARE_V1_8_5.ino`
-- Device ID prototipe: `ATOMIC-001`
-- V1.8.5 dikembangkan langsung dari V1.8.0.
-- V1.8.1–V1.8.4 tidak digunakan sebagai basis pengembangan karena memiliki bug.
-- Pengembangan versi berikutnya harus menggunakan V1.8.5 sebagai sumber dasar dan mempertahankan fitur yang sudah ada.
+Designated at the time as the stable development benchmark. Includes fingerprint authentication, operator-name management, SoftAP Admin Mode, Web Admin enrollment, OLED device information, RTC display, and RGB status feedback. Admin Mode inactivity timeout is approximately 10 minutes. The prototype SoftAP/Web Admin credentials are not production-grade.
 
-## Fitur utama
+This README describes the repository/project context and the intended focus of this branch. Features documented for later versions are **not necessarily present** in this branch. Always inspect the source code on the selected branch before compiling or integrating it.
 
-- Autentikasi sidik jari menggunakan sensor fingerprint.
-- Pengelolaan nama operator berdasarkan ID fingerprint.
-- Admin Mode melalui Wi-Fi SoftAP.
-- Web Admin untuk enrollment dan pengelolaan operator.
-- Tampilan informasi perangkat pada OLED.
-- RTC untuk informasi waktu.
-- Indikator RGB LED untuk status sistem, autentikasi, dan enrollment.
+## Hardware platform
 
-## Perubahan dan ketentuan V1.8.5
+- **Controller:** ESP32-S3 DevKitC-1 N16R8
+- **Flash:** 16 MB
+- **PSRAM:** 8 MB OPI
+- **OLED:** SSD1306, 128 × 64, I²C (commonly address `0x3C`)
+- **RTC:** DS3231
+- **Fingerprint sensor:** FPM10A / DY50-compatible UART sensor
+- **RGB LED:** onboard NeoPixel
+- **Inputs:** four push buttons
+- **Outputs:** buzzer and relay driver
+- **Ignition input:** digital ignition-sense signal
 
-### RGB LED
+### V1.9.5 GPIO reference
 
-| Kondisi | Indikator |
+The following pin assignment is documented for the V1.9.5 firmware. Earlier branches may differ; confirm the pin definitions in the selected sketch.
+
+| Function | GPIO |
+|---|---:|
+| UP / DOWN / OK / BACK buttons | 4 / 5 / 6 / 7 |
+| I²C SDA / SCL | 8 / 9 |
+| Relay control | 10 |
+| Ignition sense | 11 |
+| Buzzer | 12 |
+| Fingerprint UART TX / RX | 17 / 18 |
+| RGB LED | 48 |
+
+Fingerprint UART is configured for 57600 baud in the V1.9.5 source. Verify actual relay-driver polarity and isolation before connecting a load.
+
+## Project capabilities
+
+Capabilities introduced progressively across the version history include:
+
+- Fingerprint enrollment, matching, and access decisions.
+- Operator-name association with fingerprint sensor slots.
+- Relay control following the firmware's access decision.
+- OLED menus, system information, and user feedback.
+- ESP32 SoftAP Admin Mode and embedded Web Admin.
+- Device identity and system-status reporting.
+- Wi-Fi Station configuration and reconnect behavior.
+- MQTT heartbeat, access-event, and operator-session telemetry.
+- RTC/NTP timekeeping and timestamp reporting.
+- Hybrid local/remote MQTT transport in the V1.9.5 benchmark.
+
+The exact feature set depends on the checked-out branch.
+
+## Development history
+
+| Version | Main milestone |
 |---|---|
-| Sistem menunggu sidik jari | Biru |
-| Akses diberikan / fingerprint cocok | Hijau |
-| Akses ditolak / fingerprint tidak terverifikasi | Merah |
-| Admin Mode idle | Breathing biru |
-| Proses enrollment berlangsung | Blinking oranye |
-| Enrollment berhasil | Blinking hijau |
-| Enrollment gagal | Blinking merah |
-| Kegagalan sistem/perangkat fingerprint | Merah |
+| V1.6 | Admin Mode foundation, SoftAP/Web Admin development, and core fingerprint workflow |
+| V1.7.1–V1.7.3 | Admin Mode and OLED/Web Admin enrollment-feedback refinements |
+| V1.7.4 | A.T.O.M. rebranding and bitmap/icon changes |
+| V1.7.5 | OLED INFORMATION screen and firmware identity |
+| V1.8.0 | Device ID foundation |
+| V1.8.1–V1.8.4 | Fingerprint slot validation, captive portal behavior, and embedded JavaScript compatibility fixes |
+| V1.8.5 | Earlier stable development benchmark for operator administration and device UI |
+| V1.9.0 | Wi-Fi Station configuration and reconnect |
+| V1.9.1 | Initial MQTT telemetry using PubSubClient |
+| V1.9.2–V1.9.3 | Intermediate MQTT/device integration refinements |
+| V1.9.4 | NTP synchronization and DS3231 timekeeping |
+| V1.9.5 Hybrid MQTT | ESP-MQTT hybrid LAN TCP / Internet WSS transport; user-confirmed dashboard telemetry |
+| V1.9.5 All State | Separate feature branch enabling successful fingerprint authentication with ignition ON or OFF; hardware validation pending |
 
-### Admin Mode dan Web Admin
+## V1.9.5 Hybrid MQTT benchmark
 
-- SSID SoftAP mengikuti pola `<DEVICE_ID> SSID` (contoh: `ATOMIC-001 SSID`).
-- Password SoftAP: `atomicadmin`.
-- HTTP Basic Authentication:
-  - Username: `admin`
-  - Password: `atomicadmin`
-- Halaman Admin menggunakan ikon fingerprint dan judul **A.T.O.M. — ATOMIC ADMIN PAGE**.
-- Subtitle: **Access Tracking & Operational Monitoring**.
-- Footer menampilkan **ATOMIC SYSTEM © 2026, ENLISTERS TECHNOLOGY**.
-- Admin Mode memiliki timeout tidak aktif sekitar 10 menit.
-- Indikator RGB Admin Mode diperbarui secara non-blocking.
+The project context identifies `v1.9.5-hybrid-mqtt` as the user-confirmed benchmark. It uses:
 
-### Enrollment dan operator
+- LAN MQTT over TCP: `mqtt://192.168.0.128:1883`
+- Internet MQTT over secure WebSocket: `wss://mqtt.endyarfian.web.id:443/mqtt`
+- Device-specific MQTT client identity based on `DEVICE_ID`.
+- Device topic namespace:
+  ```text
+  atomic/devices/ATOMIC-001/heartbeat
+  atomic/devices/ATOMIC-001/events
+  atomic/devices/ATOMIC-001/sessions
+  atomic/devices/ATOMIC-001/operators
+  ```
+- Controlled transport selection and periodic LAN recovery probing while WSS is active.
 
-- ID operator baru dimulai dari 1.
-- Rentang ID fingerprint yang dapat digunakan: 1–127.
-- Nama placeholder operator lama untuk ID 1–3 dibersihkan dari penyimpanan, tanpa menghapus template sidik jari.
-- Proses enrollment menggunakan dua kali pemindaian sidik jari yang sama.
-- Status keberhasilan atau kegagalan enrollment ditampilkan pada OLED dan Web Admin.
+The user confirmed that data reached the dashboard through WSS while the device and dashboard were connected through different Wi-Fi networks. This confirmation applies to the tested V1.9.5 Hybrid MQTT firmware, not automatically to every historical branch.
 
-### Identitas dan status perangkat
+## Operator identity and session model
 
-- Informasi OLED menampilkan Device ID, nama firmware, versi firmware, dan alamat IP Admin Mode.
-- Endpoint `/api/status` menyediakan field:
-  - `device_id`
-  - `firmware_version`
-- Web Admin menampilkan Device ID dan Firmware Version pada bagian System Status.
+The project distinguishes fingerprint sensor slots, device-local operator identifiers, and permanent backend identities:
 
-## Konfigurasi perangkat
+- Each new operator registration receives a new permanent `operator_db_id`.
+- A deleted database identity is marked inactive so historical records remain attributable.
+- `device_operator_id` is managed by firmware and may be reused.
+- Fingerprint sensor slots may be reused after deletion.
+- A new registration does not automatically reactivate an older inactive database identity.
 
-Target perangkat pengembangan:
+Access decisions and operator sessions are separate concepts: an access-granted event is not itself proof that a session has started or ended. Verify the implementation on the selected branch.
 
-- Board: ESP32-S3 DevKitC-1 N16R8
-- Flash: 16 MB
-- PSRAM: 8 MB OPI
-- Arduino-ESP32 Core: 3.3.0
+## Build and upload
 
-Pastikan konfigurasi board dan library pada Arduino IDE sesuai dengan perangkat yang digunakan.
+The firmware is developed as an Arduino IDE sketch.
 
-## Catatan keamanan
+1. Check out the intended branch.
+2. Open the matching `.ino` sketch in Arduino IDE.
+3. Select the ESP32-S3 board profile appropriate for the N16R8 module.
+4. Configure 16 MB flash and OPI PSRAM where supported by the selected board package.
+5. Install the libraries required by that specific sketch. Common dependencies include Adafruit GFX, Adafruit SSD1306, RTClib, Adafruit Fingerprint Sensor Library, and Adafruit NeoPixel. MQTT dependencies vary by version.
+6. Run **Verify/Compile** before uploading.
+7. Upload to the ESP32-S3 and inspect Serial Monitor at 115200 baud.
+8. Test the changed behavior on a safe bench setup before considering field integration.
 
-Kredensial SoftAP dan Web Admin di atas merupakan kredensial prototipe. Ganti kredensial sebelum perangkat digunakan di lingkungan produksi. Jangan mengekspos Web Admin ke jaringan publik tanpa lapisan keamanan tambahan.
+Development environment used for later firmware revisions: Arduino IDE, Arduino-ESP32 Core 3.3.0, ESP-IDF 5.5 (through the selected Arduino core).
 
-## Status pengujian dan pengembangan
+## Validation status
 
-V1.8.5 merupakan baseline pengembangan yang ditetapkan saat ini. Setiap perubahan berikutnya harus dibuat sebagai versi baru berdasarkan baseline ini.
+A source file or Git commit does not prove that firmware compiles or works on hardware.
 
-Source di repository belum otomatis berarti firmware telah lolos kompilasi atau pengujian perangkat. Lakukan Verify/Compile di Arduino IDE dan pengujian bench pada ESP32-S3 sebelum digunakan. Integrasi MQTT, sinkronisasi data operator, pencatatan event akses, dan manajemen sesi akan dikembangkan serta diuji secara bertahap.
+User-confirmed milestones in the project history include the V1.6 core/Admin Mode operation, V1.7.1 normal operation, V1.9.5 Wi-Fi reconnect behavior, and V1.9.5 Hybrid MQTT telemetry reaching the dashboard over WSS from another Wi-Fi network.
+
+The V1.9.5 All State branch has been committed, but physical compilation/upload and ignition-OFF relay/session testing remain to be confirmed. Do not infer test results for this branch from the Hybrid MQTT baseline.
+
+## Security and deployment notes
+
+- Never commit Wi-Fi passwords, MQTT passwords, API tokens, private keys, or production credentials.
+- Early SoftAP/Web Admin credentials are prototype credentials and must be replaced before broader deployment.
+- Use unique device identities and credentials; do not share MQTT client IDs or device topic namespaces across devices.
+- Enforce broker ACLs per device.
+- Do not expose embedded Web Admin directly to the public Internet.
+- Review NVS/flash protection, Secure Boot, and Flash Encryption for any production security design.
+- Validate relay default state, reset behavior, brownout behavior, isolation, and wiring fail-safe characteristics.
+- Do not bypass OEM machine safety systems.
+
+## Repository workflow
+
+- Treat each version branch as its own firmware snapshot.
+- Keep confirmed baselines unchanged while developing new features.
+- Create feature branches from an explicitly selected known-good base.
+- Record the tested branch, commit SHA, board configuration, and test conditions for every hardware validation.
+- Promote a feature branch to a new benchmark only after the relevant compile, upload, and bench tests pass.
+
+**Project:** A.T.O.M. — Access, Tracking & Operation Monitoring  
+**Repository:** `endyarfian/ATOMIC-FIRMWARE`
