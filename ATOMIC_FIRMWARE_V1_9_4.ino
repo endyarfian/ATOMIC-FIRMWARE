@@ -16,7 +16,7 @@
 #define FIRMWARE_VERSION "1.9.4"
 
 // ============================================================
-// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI + MQTT + RELAY + IGNITION V1.9.3
+// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI + MQTT + RELAY + IGNITION V1.9.4
 // ESP32-S3 DevKitC-1 N16R8
 // ============================================================
 
@@ -506,7 +506,7 @@ void updateClockSync() {
         timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec));
       ntpSyncPending = false;
       ntpLastSuccessAt = now;
-      Serial.printf("[CLOCK] RTC synchronized from NTP: %04d-%02d-%02d %02d:%02d:%02d WIB\\n",
+      Serial.printf("[CLOCK] RTC synchronized from NTP: %04d-%02d-%02d %02d:%02d:%02d WIB\n",
         timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
         timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
       return;
@@ -1043,7 +1043,7 @@ void registerAdminRoutes() {
     ntpSyncPending = false;
     ntpConfigured = false;
     adminServer.send(200, "application/json", R"({"ok":true,"message":"Manual WIB time saved to RTC; automatic NTP disabled"})");
-    Serial.printf("[CLOCK] Manual RTC set: %04d-%02d-%02d %02d:%02d WIB\\n", year, month, day, hour, minute);
+    Serial.printf("[CLOCK] Manual RTC set: %04d-%02d-%02d %02d:%02d WIB\n", year, month, day, hour, minute);
   });
 
   adminServer.on("/api/mqtt/status", HTTP_GET, []() {
@@ -1849,7 +1849,7 @@ void setup() {
 
   clockPreferencesOK = clockPrefs.begin("atomicclock", false);
   if (clockPreferencesOK) clockAutoSync = clockPrefs.getBool("auto", true);
-  Serial.printf("[CLOCK] Mode: %s\\n", clockAutoSync ? "AUTO NTP" : "MANUAL");
+  Serial.printf("[CLOCK] Mode: %s\n", clockAutoSync ? "AUTO NTP" : "MANUAL");
 
   wifiPreferencesOK = wifiPrefs.begin("atomicwifi", false);
   Serial.println(wifiPreferencesOK ? "WI-FI NVS OK" : "WI-FI NVS ERROR");
