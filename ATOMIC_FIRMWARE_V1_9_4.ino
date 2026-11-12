@@ -259,7 +259,8 @@ const ScreenId menuScreens[] = {
   SCREEN_LOGO
 };
 
-const uint8_t MENU_COUNT = sizeof(menuScreens) / sizeof(menuScreens[0]);int8_t menuIndex = 0;
+const uint8_t MENU_COUNT = sizeof(menuScreens) / sizeof(menuScreens[0]);
+int8_t menuIndex = 0;
 
 bool screenDirty = true;
 
@@ -930,7 +931,8 @@ refreshStatus();loadOperators();refreshWifiStatus();refreshMqttStatus();refreshC
 )PC200HTML";
 
 void registerAdminRoutes() {
-  adminServer.on("/", HTTP_GET, []() {    if (!requireAdminAuth()) return;
+  adminServer.on("/", HTTP_GET, []() {
+    if (!requireAdminAuth()) return;
     adminServer.send_P(200, "text/html", ADMIN_HTML);
   });
 
@@ -990,57 +992,57 @@ void registerAdminRoutes() {
     if (!requireAdminAuth(false)) return;
     bool valid = rtcOK && rtc.now().year() >= 2024;
     String state = !clockAutoSync ? "manual" : (ntpSyncPending ? "syncing" : (WiFi.status() == WL_CONNECTED ? (ntpLastSuccessAt ? "synchronized" : "waiting_for_ntp") : "waiting_for_wifi"));
-    String json = "{\\"ok\\":true,\\"mode\\":\\"" + String(clockAutoSync ? "auto" : "manual") +
-      "\\",\\"valid\\":" + String(valid ? "true" : "false") +
-      ",\\"datetime\\":\\"" + clockDateTimeText() +
-      "\\",\\"ntp_status\\":\\"" + state + "\\"}";
+    String json = String(R"({"ok":true,"mode":")") + (clockAutoSync ? "auto" : "manual") +
+      R"(","valid":)" + (valid ? "true" : "false") +
+      R"(,"datetime":")" + clockDateTimeText() +
+      R"(","ntp_status":")" + state + R"("})";
     adminServer.send(200, "application/json", json);
   });
 
   adminServer.on("/api/clock/mode", HTTP_POST, []() {
     if (!requireAdminAuth()) return;
-    if (!clockPreferencesOK) { adminServer.send(503, "application/json", "{\\"ok\\":false,\\"error\\":\\"Clock settings storage unavailable\\"}"); return; }
+    if (!clockPreferencesOK) { adminServer.send(503, "application/json", R"({"ok":false,"error":"Clock settings storage unavailable"})"); return; }
     String mode = adminServer.arg("mode"); mode.trim();
-    if (mode != "auto" && mode != "manual") { adminServer.send(400, "application/json", "{\\"ok\\":false,\\"error\\":\\"Mode must be auto or manual\\"}"); return; }
+    if (mode != "auto" && mode != "manual") { adminServer.send(400, "application/json", R"({"ok":false,"error":"Mode must be auto or manual"})"); return; }
     clockAutoSync = (mode == "auto");
     clockPrefs.putBool("auto", clockAutoSync);
     ntpConfigured = false; ntpSyncPending = false; ntpLastSuccessAt = 0; ntpLastAttemptAt = 0;
     if (clockAutoSync) requestNtpSync();
     adminServer.send(200, "application/json", clockAutoSync ?
-      "{\\"ok\\":true,\\"message\\":\\"Automatic NTP mode enabled; synchronization will run when Wi-Fi is connected\\"}" :
-      "{\\"ok\\":true,\\"message\\":\\"Manual mode enabled; RTC will not be changed by NTP\\"}");
+      R"({"ok":true,"message":"Automatic NTP mode enabled; synchronization will run when Wi-Fi is connected"})" :
+      R"({"ok":true,"message":"Manual mode enabled; RTC will not be changed by NTP"})");
   });
 
   adminServer.on("/api/clock/sync", HTTP_POST, []() {
     if (!requireAdminAuth()) return;
-    if (!clockAutoSync) { adminServer.send(409, "application/json", "{\\"ok\\":false,\\"error\\":\\"Enable Automatic NTP mode first\\"}"); return; }
-    if (WiFi.status() != WL_CONNECTED) { adminServer.send(503, "application/json", "{\\"ok\\":false,\\"error\\":\\"Router Wi-Fi is not connected\\"}"); return; }
+    if (!clockAutoSync) { adminServer.send(409, "application/json", R"({"ok":false,"error":"Enable Automatic NTP mode first"})"); return; }
+    if (WiFi.status() != WL_CONNECTED) { adminServer.send(503, "application/json", R"({"ok":false,"error":"Router Wi-Fi is not connected"})"); return; }
     ntpConfigured = false;
     requestNtpSync();
-    adminServer.send(200, "application/json", "{\\"ok\\":true,\\"message\\":\\"NTP synchronization requested; status will update shortly\\"}");
+    adminServer.send(200, "application/json", R"({"ok":true,"message":"NTP synchronization requested; status will update shortly"})");
   });
 
   adminServer.on("/api/clock/manual", HTTP_POST, []() {
     if (!requireAdminAuth()) return;
-    if (!rtcOK || !clockPreferencesOK) { adminServer.send(503, "application/json", "{\\"ok\\":false,\\"error\\":\\"RTC or clock settings storage unavailable\\"}"); return; }
+    if (!rtcOK || !clockPreferencesOK) { adminServer.send(503, "application/json", R"({"ok":false,"error":"RTC or clock settings storage unavailable"})"); return; }
     int year = adminServer.arg("year").toInt();
     int month = adminServer.arg("month").toInt();
     int day = adminServer.arg("day").toInt();
     int hour = adminServer.arg("hour").toInt();
     int minute = adminServer.arg("minute").toInt();
     if (year < 2024 || year > 2099 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-      adminServer.send(400, "application/json", "{\\"ok\\":false,\\"error\\":\\"Invalid date or time\\"}"); return;
+      adminServer.send(400, "application/json", R"({"ok":false,"error":"Invalid date or time"})"); return;
     }
     DateTime candidate(year, month, day, hour, minute, 0);
     if (candidate.year() != year || candidate.month() != month || candidate.day() != day) {
-      adminServer.send(400, "application/json", "{\\"ok\\":false,\\"error\\":\\"Invalid calendar date\\"}"); return;
+      adminServer.send(400, "application/json", R"({"ok":false,"error":"Invalid calendar date"})"); return;
     }
     rtc.adjust(candidate);
     clockAutoSync = false;
     clockPrefs.putBool("auto", false);
     ntpSyncPending = false;
     ntpConfigured = false;
-    adminServer.send(200, "application/json", "{\\"ok\\":true,\\"message\\":\\"Manual WIB time saved to RTC; automatic NTP disabled\\"}");
+    adminServer.send(200, "application/json", R"({"ok":true,"message":"Manual WIB time saved to RTC; automatic NTP disabled"})");
     Serial.printf("[CLOCK] Manual RTC set: %04d-%02d-%02d %02d:%02d WIB\\n", year, month, day, hour, minute);
   });
 
@@ -1389,7 +1391,8 @@ void drawInformationScreenA(GFXcanvas1 &c) {
 
 void drawInformationScreenB(GFXcanvas1 &c) {
   // Device ID replaces the INFORMATION header; retain the original details below.
-  drawCenteredHeader(c, DEVICE_ID);  drawCenteredTextAtY(c, "ATOMIC FIRMWARE", 25, 1);
+  drawCenteredHeader(c, DEVICE_ID);
+  drawCenteredTextAtY(c, "ATOMIC FIRMWARE", 25, 1);
   drawCenteredTextAtY(c, FIRMWARE_VERSION, 39, 1);
   drawCenteredTextAtY(c, "192.168.4.1", 53, 1);
 }
