@@ -437,6 +437,18 @@ static const unsigned long WIFI_RETRY_INTERVAL = 30000UL;
 
 void beginWifiConnection() {
   if (!wifiHasCredentials || !wifiConfiguredSsid.length()) return;
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnecting = false;
+    return;
+  }
+
+  // Clear any previous/incomplete STA attempt before applying credentials again.
+  // ESP32 may reject WiFi.begin() with "sta is connecting, cannot set config"
+  // when a retry is issued while the previous association attempt is still active.
+  Serial.println("[WIFI] Stopping previous STA attempt before reconnect");
+  WiFi.disconnect(false, false);
+  delay(150);
+
   WiFi.setAutoReconnect(true);
   wifi_mode_t targetMode = adminModeActive ? WIFI_AP_STA : WIFI_STA;
   if (WiFi.getMode() != targetMode) WiFi.mode(targetMode);
@@ -459,7 +471,8 @@ void updateWifiConnection() {
   if (wifiConnecting && now - wifiAttemptStartedAt < WIFI_CONNECT_TIMEOUT) return;
   if (wifiConnecting) {
     wifiConnecting = false;
-    Serial.println("[WIFI] Connection timeout; will retry");
+    Serial.println("[WIFI] Connection timeout; stopping incomplete STA attempt");
+    WiFi.disconnect(false, false);
   }
   if (now - wifiLastAttemptAt >= WIFI_RETRY_INTERVAL) beginWifiConnection();
 }
