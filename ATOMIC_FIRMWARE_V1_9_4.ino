@@ -816,15 +816,15 @@ void updateMqtt() {
     if (now - mqttLastHeartbeat >= MQTT_HEARTBEAT_INTERVAL) {
       mqttLastHeartbeat = now;
       if (fingerOK) finger.getTemplateCount();
-      String payload = "{\\"device_id\\":\\"" + String(DEVICE_ID) +
-        "\\",\\"firmware_version\\":\\"" + String(FIRMWARE_VERSION) +
-        "\\",\\"status\\":\\"online\\",\\"ip\\":\\"" + WiFi.localIP().toString() +
-        "\\",\\"rssi\\":" + String(WiFi.RSSI()) +
-        ",\\"templates\\":" + String(fingerOK ? finger.templateCount : 0) +
-        ",\\"ignition_state\\":\\"" + String(ignitionOn ? "ON" : "OFF") + "\\"" +
-        ",\\"relay_state\\":\\"" + String(relayActive ? "ON" : "OFF") + "\\"" +
-        ",\\"session_active\\":" + String(sessionActive ? "true" : "false") +
-        ",\\"occurred_at\\":\\"" + atomTimestamp() + "\\"}";
+      String payload = "{\"device_id\":\"" + String(DEVICE_ID) +
+        "\",\"firmware_version\":\"" + String(FIRMWARE_VERSION) +
+        "\",\"status\":\"online\",\"ip\":\"" + WiFi.localIP().toString() +
+        "\",\"rssi\":" + String(WiFi.RSSI()) +
+        ",\"templates\":" + String(fingerOK ? finger.templateCount : 0) +
+        ",\"ignition_state\":\"" + String(ignitionOn ? "ON" : "OFF") + "\"" +
+        ",\"relay_state\":\"" + String(relayActive ? "ON" : "OFF") + "\"" +
+        ",\"session_active\":" + String(sessionActive ? "true" : "false") +
+        ",\"occurred_at\":\"" + atomTimestamp() + "\"}";
       mqttPublishJson("heartbeat", payload);
     }
     if (mqttCurrentTransport == MQTT_TRANSPORT_INTERNET_WSS &&
@@ -1181,14 +1181,14 @@ void registerAdminRoutes() {
   adminServer.on("/api/mqtt/status", HTTP_GET, []() {
     if (!requireAdminAuth(false)) return;
     String state = mqttConnected ? "connected" : (mqttHasCredentials ? (WiFi.status() == WL_CONNECTED ? "connecting" : "waiting_for_wifi") : "not_configured");
-    String json = "{\\"ok\\":true,\\"configured\\":" + String(mqttHasCredentials ? "true" : "false") +
-      ",\\"connected\\":" + String(mqttConnected ? "true" : "false") +
-      ",\\"status\\":\\"" + state + "\\"" +
-      ",\\"active_transport\\":\\"" + mqttTransportText(mqttCurrentTransport) + "\\"" +
-      ",\\"active_endpoint\\":\\"" + jsonEscape(mqttClientUri) + "\\"" +
-      ",\\"wss_endpoint\\":\\"" + String(MQTT_WSS_URI) + "\\"" +
-      ",\\"host\\":\\"" + jsonEscape(mqttBrokerHost) +
-      "\\",\\"port\\":" + String(mqttBrokerPort) + ",\\"username\\":\\"" + jsonEscape(mqttUsername) + "\\"}";
+    String json = "{\"ok\":true,\"configured\":" + String(mqttHasCredentials ? "true" : "false") +
+      ",\"connected\":" + String(mqttConnected ? "true" : "false") +
+      ",\"status\":\"" + state + "\"" +
+      ",\"active_transport\":\"" + mqttTransportText(mqttCurrentTransport) + "\"" +
+      ",\"active_endpoint\":\"" + jsonEscape(mqttClientUri) + "\"" +
+      ",\"wss_endpoint\":\"" + String(MQTT_WSS_URI) + "\"" +
+      ",\"host\":\"" + jsonEscape(mqttBrokerHost) +
+      "\",\"port\":" + String(mqttBrokerPort) + ",\"username\":\"" + jsonEscape(mqttUsername) + "\"}";
     adminServer.send(200, "application/json", json);
   });
   adminServer.on("/api/mqtt/configure", HTTP_POST, []() {
