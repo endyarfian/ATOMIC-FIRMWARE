@@ -564,7 +564,7 @@ unsigned long mqttAttemptStartedAt = 0;
 unsigned long mqttLastLanProbeAt = 0;
 unsigned long mqttLastHeartbeat = 0;
 
-const char* mqttTransportText(MqttTransport transport) {
+const char* mqttTransportText(uint8_t transport) {
   switch (transport) {
     case MQTT_TRANSPORT_LAN_TCP: return "lan_tcp";
     case MQTT_TRANSPORT_INTERNET_WSS: return "internet_wss";
@@ -598,7 +598,7 @@ static void mqttEventHandler(void* handlerArgs, esp_event_base_t base, int32_t e
   }
 }
 
-bool startMqttTransport(MqttTransport transport) {
+bool startMqttTransport(uint8_t transport) {
   stopMqttClient();
   if (WiFi.status() != WL_CONNECTED || !mqttHasCredentials) return false;
 
@@ -627,7 +627,7 @@ bool startMqttTransport(MqttTransport transport) {
     mqttCurrentTransport = MQTT_TRANSPORT_NONE; mqttClientUri = "";
     return false;
   }
-  esp_err_t eventResult = esp_mqtt_client_register_event(mqttEspClient, ESP_EVENT_ANY_ID, mqttEventHandler, nullptr);
+  esp_err_t eventResult = esp_mqtt_client_register_event(mqttEspClient, (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID, mqttEventHandler, nullptr);
   if (eventResult != ESP_OK) {
     Serial.printf("[MQTT] Event registration failed: %d\n", (int)eventResult);
     esp_mqtt_client_destroy(mqttEspClient); mqttEspClient = nullptr;
