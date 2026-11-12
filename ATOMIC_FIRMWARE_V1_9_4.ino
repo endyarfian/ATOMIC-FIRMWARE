@@ -8,15 +8,16 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
-#include <PubSubClient.h>
+#include "mqtt_client.h"
+#include "esp_crt_bundle.h"
 #include "esp_sleep.h"
 
 // ================= A.T.O.M. IDENTITY =====================
 #define DEVICE_ID "ATOMIC-001"
-#define FIRMWARE_VERSION "1.9.4"
+#define FIRMWARE_VERSION "1.9.5"
 
 // ============================================================
-// A.T.O.M. (Access, Tracking & Operation Monitoring) - WIFI + MQTT + RELAY + IGNITION V1.9.4
+// A.T.O.M. (Access, Tracking & Operation Monitoring) - HYBRID MQTT + RELAY + IGNITION V1.9.5
 // ESP32-S3 DevKitC-1 N16R8
 // ============================================================
 
@@ -536,9 +537,7 @@ String clockDateTimeText() {
   return String(value);
 }
 
-// ---------- MQTT client and telemetry V1.9.1 ----------
-WiFiClient mqttNetworkClient;
-PubSubClient mqttClient(mqttNetworkClient);
+// ---------- HYBRID MQTT V1.9.5 (ESP-MQTT / ESP-IDF 5.5) ----------
 Preferences mqttPrefs;
 bool mqttPreferencesOK = false;
 bool mqttHasCredentials = false;
@@ -546,10 +545,117 @@ String mqttBrokerHost = "192.168.0.128";
 uint16_t mqttBrokerPort = 1883;
 String mqttUsername = "atomic_device_001";
 String mqttPassword = "";
-unsigned long mqttLastConnectAttempt = 0;
-unsigned long mqttLastHeartbeat = 0;
+
+static const char* MQTT_WSS_URI = "wss://mqtt.endyarfian.web.id:443/mqtt";
 static const unsigned long MQTT_RECONNECT_INTERVAL = 10000UL;
 static const unsigned long MQTT_HEARTBEAT_INTERVAL = 30000UL;
+static const unsigned long MQTT_LAN_CONNECT_TIMEOUT = 8000UL;
+static const unsigned long MQTT_WSS_CONNECT_TIMEOUT = 15000UL;
+static const unsigned long MQTT_LAN_PROBE_INTERVAL = 60000UL;
+static const uint16_t MQTT_LAN_PROBE_TIMEOUT = 250;
+
+enum MqttTransport : uint8_t { MQTT_TRANSPORT_NONE = 0, MQTT_TRANSPORT_LAN_TCP, MQTT_TRANSPORT_INTERNET_WSS };
+esp_mqtt_client_handle_t mqttEspClient = nullptr;
+volatile bool mqttConnected = false;
+MqttTransport mqttCurrentTransport = MQTT_TRANSPORT_NONE;
+String mqttClientUri = "";
+unsigned long mqttLastConnectAttempt = 0;
+unsigned long mqttAttemptStartedAt = 0;
+unsigned long mqttLastLanProbeAt = 0;
+unsigned long mqttLastHeartbeat = 0;
+
+const char* mqttTransportText(MqttTransport transport) {
+  switch (transport) {
+    case MQTT_TRANSPORT_LAN_TCP: return "lan_tcp";
+    case MQTT_TRANSPORT_INTERNET_WSS: return "internet_wss";
+    default: return "none";
+  }
+}
+
+void stopMqttClient() {
+  mqttConnected = false;
+  if (mqttEspClient != nullptr) {
+    esp_mqtt_client_stop(mqttEspClient);
+    esp_mqtt_client_destroy(mqttEspClient);
+    mqttEspClient = nullptr;
+  }
+  mqttCurrentTransport = MQTT_TRANSPORT_NONE;
+  mqttClientUri = "";
+}
+
+static void mqttEventHandler(void* handlerArgs, esp_event_base_t base, int32_t eventId, void* eventData) {
+  (void)handlerArgs; (void)base; (void)eventData;
+  if (eventId == MQTT_EVENT_CONNECTED) {
+    mqttConnected = true;
+    mqttLastHeartbeat = 0;
+    Serial.printf("[MQTT] Connected via %s\\n", mqttTransportText(mqttCurrentTransport));
+  } else if (eventId == MQTT_EVENT_DISCONNECTED) {
+    mqttConnected = false;
+    Serial.printf("[MQTT] Disconnected from %s\\n", mqttTransportText(mqttCurrentTransport));
+  } else if (eventId == MQTT_EVENT_ERROR) {
+    mqttConnected = false;
+    Serial.printf("[MQTT] Transport error on %s\\n", mqttTransportText(mqttCurrentTransport));
+  }
+}
+
+bool startMqttTransport(MqttTransport transport) {
+  stopMqttClient();
+  if (WiFi.status() != WL_CONNECTED || !mqttHasCredentials) return false;
+
+  mqttCurrentTransport = transport;
+  mqttClientUri = (transport == MQTT_TRANSPORT_LAN_TCP)
+    ? ("mqtt://" + mqttBrokerHost + ":" + String(mqttBrokerPort))
+    : String(MQTT_WSS_URI);
+
+  esp_mqtt_client_config_t config = {};
+  config.broker.address.uri = mqttClientUri.c_str();
+  if (transport == MQTT_TRANSPORT_INTERNET_WSS) {
+    config.broker.verification.crt_bundle_attach = esp_crt_bundle_attach;
+  }
+  config.credentials.client_id = DEVICE_ID;
+  config.credentials.username = mqttUsername.c_str();
+  config.credentials.authentication.password = mqttPassword.c_str();
+  config.session.keepalive = 30;
+  config.network.timeout_ms = 5000;
+  config.network.reconnect_timeout_ms = MQTT_RECONNECT_INTERVAL;
+  config.network.disable_auto_reconnect = true;
+  config.buffer.size = 512;
+
+  mqttEspClient = esp_mqtt_client_init(&config);
+  if (mqttEspClient == nullptr) {
+    Serial.println("[MQTT] ESP-MQTT initialization failed");
+    mqttCurrentTransport = MQTT_TRANSPORT_NONE; mqttClientUri = "";
+    return false;
+  }
+  esp_err_t eventResult = esp_mqtt_client_register_event(mqttEspClient, ESP_EVENT_ANY_ID, mqttEventHandler, nullptr);
+  if (eventResult != ESP_OK) {
+    Serial.printf("[MQTT] Event registration failed: %d\\n", (int)eventResult);
+    esp_mqtt_client_destroy(mqttEspClient); mqttEspClient = nullptr;
+    mqttCurrentTransport = MQTT_TRANSPORT_NONE; mqttClientUri = "";
+    return false;
+  }
+  esp_err_t startResult = esp_mqtt_client_start(mqttEspClient);
+  if (startResult != ESP_OK) {
+    Serial.printf("[MQTT] Client start failed: %d\\n", (int)startResult);
+    esp_mqtt_client_destroy(mqttEspClient); mqttEspClient = nullptr;
+    mqttCurrentTransport = MQTT_TRANSPORT_NONE; mqttClientUri = "";
+    return false;
+  }
+  mqttAttemptStartedAt = millis();
+  mqttLastConnectAttempt = mqttAttemptStartedAt;
+  Serial.printf("[MQTT] Starting %s via %s\\n", mqttTransportText(transport), mqttClientUri.c_str());
+  return true;
+}
+
+bool probeLanMqttBroker() {
+  if (WiFi.status() != WL_CONNECTED || !mqttBrokerHost.length()) return false;
+  WiFiClient probeClient;
+  probeClient.setTimeout(MQTT_LAN_PROBE_TIMEOUT);
+  bool reachable = probeClient.connect(mqttBrokerHost.c_str(), mqttBrokerPort, MQTT_LAN_PROBE_TIMEOUT);
+  probeClient.stop();
+  Serial.printf("[MQTT] LAN broker TCP probe: %s\\n", reachable ? "reachable" : "unreachable");
+  return reachable;
+}
 
 String activeSessionId = "";
 String activeSessionStartedAt = "";
@@ -602,7 +708,7 @@ void updateAutoSleep() {
 
   Serial.println("[POWER] One hour without activity; entering deep sleep");
   setRelay(false);
-  if (mqttClient.connected()) mqttClient.disconnect();
+  stopMqttClient();
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
   delay(100);
@@ -623,9 +729,10 @@ String atomTimestamp() {
 }
 String mqttTopic(const char* suffix) { return String("atomic/devices/") + DEVICE_ID + "/" + suffix; }
 bool mqttPublishJson(const char* suffix, const String &payload) {
-  if (!mqttClient.connected()) return false;
+  if (!mqttConnected || mqttEspClient == nullptr) return false;
   String topic = mqttTopic(suffix);
-  return mqttClient.publish(topic.c_str(), payload.c_str(), false);
+  int messageId = esp_mqtt_client_publish(mqttEspClient, topic.c_str(), payload.c_str(), 0, 0, 0);
+  return messageId >= 0;
 }
 
 // Publish operator metadata independently from access/session events.
@@ -692,38 +799,62 @@ void endOperatorSession() {
 }
 void updateMqtt() {
   if (WiFi.status() != WL_CONNECTED || !mqttHasCredentials) {
-    if (mqttClient.connected()) mqttClient.disconnect();
+    if (mqttEspClient != nullptr) stopMqttClient();
+    mqttLastConnectAttempt = 0;
     return;
   }
-  if (mqttClient.connected()) {
-    mqttClient.loop();
-    unsigned long now = millis();
+
+  unsigned long now = millis();
+  if (mqttEspClient == nullptr) {
+    if (now - mqttLastConnectAttempt < MQTT_RECONNECT_INTERVAL) return;
+    startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
+    return;
+  }
+
+  if (mqttConnected) {
     if (now - mqttLastHeartbeat >= MQTT_HEARTBEAT_INTERVAL) {
       mqttLastHeartbeat = now;
       if (fingerOK) finger.getTemplateCount();
-      String payload = "{\"device_id\":\"" + String(DEVICE_ID) +
-        "\",\"firmware_version\":\"" + String(FIRMWARE_VERSION) +
-        "\",\"status\":\"online\",\"ip\":\"" + WiFi.localIP().toString() +
-        "\",\"rssi\":" + String(WiFi.RSSI()) +
-        ",\"templates\":" + String(fingerOK ? finger.templateCount : 0) +
-        ",\"ignition_state\":\"" + String(ignitionOn ? "ON" : "OFF") + "\"" +
-        ",\"relay_state\":\"" + String(relayActive ? "ON" : "OFF") + "\"" +
-        ",\"session_active\":" + String(sessionActive ? "true" : "false") +
-        ",\"occurred_at\":\"" + atomTimestamp() + "\"}";
+      String payload = "{\\\"device_id\\\":\\\"" + String(DEVICE_ID) +
+        "\\\",\\\"firmware_version\\\":\\\"" + String(FIRMWARE_VERSION) +
+        "\\\",\\\"status\\\":\\\"online\\\",\\\"ip\\\":\\\"" + WiFi.localIP().toString() +
+        "\\\",\\\"rssi\\\":" + String(WiFi.RSSI()) +
+        ",\\\"templates\\\":" + String(fingerOK ? finger.templateCount : 0) +
+        ",\\\"ignition_state\\\":\\\"" + String(ignitionOn ? "ON" : "OFF") + "\\\"" +
+        ",\\\"relay_state\\\":\\\"" + String(relayActive ? "ON" : "OFF") + "\\\"" +
+        ",\\\"session_active\\\":" + String(sessionActive ? "true" : "false") +
+        ",\\\"occurred_at\\\":\\\"" + atomTimestamp() + "\\\"}";
       mqttPublishJson("heartbeat", payload);
+    }
+    if (mqttCurrentTransport == MQTT_TRANSPORT_INTERNET_WSS &&
+        now - mqttLastLanProbeAt >= MQTT_LAN_PROBE_INTERVAL) {
+      mqttLastLanProbeAt = now;
+      if (probeLanMqttBroker()) {
+        Serial.println("[MQTT] LAN restored; switching WSS -> LAN TCP");
+        startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
+      }
     }
     return;
   }
-  unsigned long now = millis();
-  if (now - mqttLastConnectAttempt < MQTT_RECONNECT_INTERVAL) return;
-  mqttLastConnectAttempt = now;
-  mqttClient.setServer(mqttBrokerHost.c_str(), mqttBrokerPort);
-  mqttClient.setSocketTimeout(1);
-  mqttClient.setKeepAlive(30);
-  Serial.printf("[MQTT] Connecting to %s:%u...\n", mqttBrokerHost.c_str(), (unsigned)mqttBrokerPort);
-  if (mqttClient.connect(DEVICE_ID, mqttUsername.c_str(), mqttPassword.c_str())) {
-    Serial.println("[MQTT] Connected to broker"); mqttLastHeartbeat = 0;
-  } else Serial.printf("[MQTT] Connection failed, state=%d\n", mqttClient.state());
+
+  unsigned long timeout = mqttCurrentTransport == MQTT_TRANSPORT_LAN_TCP
+    ? MQTT_LAN_CONNECT_TIMEOUT : MQTT_WSS_CONNECT_TIMEOUT;
+  if (now - mqttAttemptStartedAt < timeout) return;
+
+  if (mqttCurrentTransport == MQTT_TRANSPORT_LAN_TCP) {
+    Serial.println("[MQTT] LAN timeout; falling back to WSS");
+    startMqttTransport(MQTT_TRANSPORT_INTERNET_WSS);
+    return;
+  }
+
+  if (now - mqttLastLanProbeAt >= MQTT_RECONNECT_INTERVAL) {
+    mqttLastLanProbeAt = now;
+    if (probeLanMqttBroker()) {
+      startMqttTransport(MQTT_TRANSPORT_LAN_TCP);
+      return;
+    }
+  }
+  startMqttTransport(MQTT_TRANSPORT_INTERNET_WSS);
 }
 
 // ---------- Fingerprint enrollment state machine ----------
@@ -908,7 +1039,7 @@ const char ADMIN_HTML[] PROGMEM = R"PC200HTML(
 <section><h2>System status</h2><div id="status">Loading…</div><button onclick="refreshStatus()">Refresh status</button></section>
 <section><h2>System Clock</h2><p id="clockStatus" class="muted">Loading clock status…</p><div><button type="button" onclick="setClockMode('auto')">Automatic NTP</button><button type="button" onclick="syncClockNow()">Sync NTP now</button></div><form id="clockForm"><label for="manualDateTime" class="muted">Set date and time manually (WIB)</label><br><input id="manualDateTime" type="datetime-local" required><button type="submit">Save manual time</button></form><p id="clockMessage" class="muted">Automatic mode uses NTP when router Wi-Fi is connected. Manual mode keeps the RTC clock without NTP correction.</p></section>
 <section><h2>Wi-Fi Configuration</h2><form id="wifiForm"><input id="wifiSsid" maxlength="32" placeholder="Router Wi-Fi SSID" required><input id="wifiPassword" type="password" maxlength="63" placeholder="Router Wi-Fi password (leave blank for open network)"><button id="wifiSubmit" type="submit">Save &amp; Connect</button></form><p id="wifiMessage" class="muted">Enter router credentials to connect.</p><div id="wifiStatus" class="muted">Loading Wi-Fi status…</div></section>
-<section><h2>MQTT Configuration</h2><form id="mqttForm"><input id="mqttHost" maxlength="63" value="192.168.0.128" placeholder="Broker host" required><input id="mqttPort" type="number" min="1" max="65535" value="1883" required><input id="mqttUser" maxlength="32" value="atomic_device_001" placeholder="MQTT username" required><input id="mqttPassword" type="password" maxlength="64" placeholder="MQTT password" required><button id="mqttSubmit" type="submit">Save MQTT Settings</button></form><p id="mqttStatus" class="muted">Loading MQTT status…</p></section>
+<section><h2>MQTT Hybrid Configuration</h2><p class="muted">LAN priority: MQTT TCP. Internet fallback: MQTT over WSS at mqtt.endyarfian.web.id:443/mqtt. TLS certificate verification is enabled.</p><form id="mqttForm"><input id="mqttHost" maxlength="63" value="192.168.0.128" placeholder="LAN broker host" required><input id="mqttPort" type="number" min="1" max="65535" value="1883" required><input id="mqttUser" maxlength="32" value="atomic_device_001" placeholder="MQTT username" required><input id="mqttPassword" type="password" maxlength="64" placeholder="MQTT password" required><button id="mqttSubmit" type="submit">Save MQTT Settings</button></form><p id="mqttStatus" class="muted">Loading MQTT status…</p></section>
 <section><h2>Enroll operator</h2><p class="muted">Operator IDs start at 1. Use only IDs confirmed empty in the sensor.</p><form id="enrollForm"><input id="opid" type="number" min="1" max="127" placeholder="Fingerprint ID (1–127)" required><input id="opname" maxlength="20" placeholder="Operator name (max 20 char)" required><button type="submit">Start enrollment</button></form><p id="enrollStatus">Idle</p><button id="cancelEnroll" class="danger" onclick="cancelEnrollment()" hidden>Cancel enrollment</button></section>
 <section><h2>Operators</h2><div id="operators">Loading…</div><button onclick="loadOperators()">Refresh operators</button></section>
 <p id="message" class="muted"></p><p class="muted" style="text-align: center">ATOMIC SYSTEM © 2026, <a href="https://endyarfian.github.io" target="_blank" rel="noopener noreferrer" style="color: orange;">ENLISTERS TECHNOLOGY</a>.</p></main><script>
@@ -924,7 +1055,7 @@ const setClockMode = async mode => {try{let j=await api("/api/clock/mode","POST"
 const syncClockNow = async () => {try{let j=await api("/api/clock/sync","POST",{});$("clockMessage").textContent=j.message;refreshClockStatus()}catch(e){$("clockMessage").textContent=e.message}};
 $("clockForm").onsubmit=async e=>{e.preventDefault();try{let value=$("manualDateTime").value;if(!value)throw Error("Choose date and time");let [date,time]=value.split("T");let [year,month,day]=date.split("-");let [hour,minute]=time.split(":");let j=await api("/api/clock/manual","POST",{year,month,day,hour,minute});$("clockMessage").textContent=j.message;refreshClockStatus()}catch(e){$("clockMessage").textContent=e.message}};
 const refreshWifiStatus = async () => {try{let w=await api("/api/wifi/status");let state=w.status==="connected"?"Connected to router":w.status==="connecting"?"Connecting to router…":w.status==="disconnected"?"Disconnected — retrying automatically":"Not configured";let detail=w.connected?`SSID: ${w.ssid} | IP: ${w.ip} | Signal: ${w.rssi} dBm`:state;$("wifiStatus").textContent=detail;$("wifiStatus").style.color=w.connected?"#63d49b":w.connecting?"#e7bd62":"#aab7c0";if(w.connected&&$("wifiMessage").dataset.state!=="connected"){$("wifiMessage").textContent="Connected to router successfully.";$("wifiMessage").dataset.state="connected"}else if(w.status==="disconnected"&&$("wifiMessage").dataset.state!=="failed"){$("wifiMessage").textContent="Router connection unavailable. Check credentials or router; automatic retry is active.";$("wifiMessage").dataset.state="failed"}else if(w.connecting){$("wifiMessage").textContent="Connecting to router…";$("wifiMessage").dataset.state="connecting"}}catch(e){$("wifiStatus").textContent=e.message}};
-const refreshMqttStatus = async () => {try{let m=await api("/api/mqtt/status");$("mqttStatus").textContent=m.connected?"Connected — "+m.host+":"+m.port+" | User: "+m.username:"Status: "+m.status+" | Broker: "+m.host+":"+m.port;$("mqttStatus").style.color=m.connected?"#63d49b":"#e7bd62"}catch(e){$("mqttStatus").textContent=e.message}};
+const refreshMqttStatus = async () => {try{let m=await api("/api/mqtt/status");$("mqttStatus").textContent=(m.connected?"Connected":"Status: "+m.status)+" | Active: "+m.active_transport+" | LAN: "+m.host+":"+m.port+" | WSS fallback: "+m.wss_endpoint;$("mqttStatus").style.color=m.connected?"#63d49b":"#e7bd62"}catch(e){$("mqttStatus").textContent=e.message}};
 $("mqttForm").onsubmit=async e=>{e.preventDefault();$("mqttSubmit").disabled=true;try{await api("/api/mqtt/configure","POST",{host:$("mqttHost").value.trim(),port:$("mqttPort").value,user:$("mqttUser").value.trim(),password:$("mqttPassword").value});$("mqttPassword").value="";$("mqttStatus").textContent="Settings saved. Connecting…";refreshMqttStatus()}catch(e){$("mqttStatus").textContent=e.message}finally{$("mqttSubmit").disabled=false}};
 $("wifiForm").onsubmit=async e=>{e.preventDefault();$("wifiSubmit").disabled=true;$("wifiMessage").textContent="Saving settings and connecting…";$("wifiMessage").dataset.state="connecting";try{await api("/api/wifi/configure","POST",{ssid:$("wifiSsid").value.trim(),password:$("wifiPassword").value});$("wifiPassword").value="";$("wifiMessage").textContent="Credentials saved. Connecting to router…";refreshWifiStatus()}catch(e){$("wifiMessage").textContent=e.message;$("wifiMessage").dataset.state="failed"}finally{$("wifiSubmit").disabled=false}};
 refreshStatus();loadOperators();refreshWifiStatus();refreshMqttStatus();refreshClockStatus();setInterval(refreshWifiStatus,2000);setInterval(refreshMqttStatus,3000);setInterval(refreshClockStatus,5000);</script></body></html>
@@ -957,7 +1088,7 @@ void registerAdminRoutes() {
       "\",\"ssid\":\"" + jsonEscape(wifiConfiguredSsid) +
       "\",\"ip\":\"" + (connected ? WiFi.localIP().toString() : String("")) +
       "\",\"rssi\":" + String(connected ? WiFi.RSSI() : 0) +
-      ",\"mqtt\":\"" + String(mqttClient.connected() ? "connected" : (mqttHasCredentials ? "disconnected" : "not_configured")) + "\"}";
+      ",\"mqtt\":\"" + String(mqttConnected ? "connected" : (mqttHasCredentials ? "disconnected" : "not_configured")) + "\"}";
     adminServer.send(200, "application/json", json);
   });
 
@@ -1048,11 +1179,15 @@ void registerAdminRoutes() {
 
   adminServer.on("/api/mqtt/status", HTTP_GET, []() {
     if (!requireAdminAuth(false)) return;
-    String state = mqttClient.connected() ? "connected" : (mqttHasCredentials ? (WiFi.status() == WL_CONNECTED ? "disconnected" : "waiting_for_wifi") : "not_configured");
-    String json = "{\"ok\":true,\"configured\":" + String(mqttHasCredentials ? "true" : "false") +
-      ",\"connected\":" + String(mqttClient.connected() ? "true" : "false") +
-      ",\"status\":\"" + state + "\",\"host\":\"" + jsonEscape(mqttBrokerHost) +
-      "\",\"port\":" + String(mqttBrokerPort) + ",\"username\":\"" + jsonEscape(mqttUsername) + "\"}";
+    String state = mqttConnected ? "connected" : (mqttHasCredentials ? (WiFi.status() == WL_CONNECTED ? "connecting" : "waiting_for_wifi") : "not_configured");
+    String json = "{\\\"ok\\\":true,\\\"configured\\\":" + String(mqttHasCredentials ? "true" : "false") +
+      ",\\\"connected\\\":" + String(mqttConnected ? "true" : "false") +
+      ",\\\"status\\\":\\\"" + state + "\\\"" +
+      ",\\\"active_transport\\\":\\\"" + mqttTransportText(mqttCurrentTransport) + "\\\"" +
+      ",\\\"active_endpoint\\\":\\\"" + jsonEscape(mqttClientUri) + "\\\"" +
+      ",\\\"wss_endpoint\\\":\\\"" + String(MQTT_WSS_URI) + "\\\"" +
+      ",\\\"host\\\":\\\"" + jsonEscape(mqttBrokerHost) +
+      "\\\",\\\"port\\\":" + String(mqttBrokerPort) + ",\\\"username\\\":\\\"" + jsonEscape(mqttUsername) + "\\\"}";
     adminServer.send(200, "application/json", json);
   });
   adminServer.on("/api/mqtt/configure", HTTP_POST, []() {
@@ -1070,7 +1205,7 @@ void registerAdminRoutes() {
       adminServer.send(500, "application/json", "{\"ok\":false,\"error\":\"Failed to save MQTT settings\"}"); return;
     }
     mqttBrokerHost = host; mqttBrokerPort = (uint16_t)port; mqttUsername = user; mqttPassword = password;
-    mqttHasCredentials = true; mqttClient.disconnect(); mqttLastConnectAttempt = 0;
+    mqttHasCredentials = true; stopMqttClient(); mqttLastConnectAttempt = 0;
     adminServer.send(200, "application/json", "{\"ok\":true,\"message\":\"MQTT settings saved; connection will start automatically\"}");
   });
   adminServer.on("/api/operators", HTTP_GET, []() {
@@ -1845,7 +1980,7 @@ void setup() {
     mqttHasCredentials = mqttBrokerHost.length() && mqttUsername.length() && mqttPassword.length();
     if (mqttHasCredentials) Serial.println("[MQTT] Saved broker settings found");
   }
-  mqttClient.setBufferSize(512);
+  // ESP-MQTT configures a 512-byte buffer for each transport.
 
   clockPreferencesOK = clockPrefs.begin("atomicclock", false);
   if (clockPreferencesOK) clockAutoSync = clockPrefs.getBool("auto", true);
